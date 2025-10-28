@@ -1,0 +1,17 @@
+/* Featured restaurants styles */
+.featured {
+  margin-bottom: 1.5rem;
+}
+.list {
+  display: flex;
+  gap: 1rem;
+}
+.card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  padding: 1rem;
+  min-width: 180px;
+  text-align: center;
+  font-weight: 500;
+}

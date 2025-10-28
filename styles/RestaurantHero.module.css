@@ -1,0 +1,109 @@
+/* Hero section with banner image and logo */
+.hero {
+  position: relative;
+  width: 100%;
+  margin: 0 auto 16px;
+}
+
+.banner {
+  position: relative;
+  width: 100%;
+  height: 220px;
+  background: #e5e7eb; /* gray-200 fallback */
+  background-size: cover;
+  background-position: center;
+  border-radius: 0 0 16px 16px;
+  overflow: hidden;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.15) 50%, rgba(0,0,0,0) 100%);
+}
+
+.content {
+  position: relative;
+  max-width: 960px;
+  margin: -44px auto 0; /* pull up over banner */
+  padding: 0 16px;
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+}
+
+.logoWrap {
+  width: 88px;
+  height: 88px;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 6px 18px rgba(17, 24, 39, 0.12);
+  overflow: hidden;
+}
+.logo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.logoPlaceholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+}
+
+.info {
+  flex: 1;
+  color: #111827; /* gray-900 */
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 10px 12px;
+  box-shadow: 0 6px 18px rgba(17, 24, 39, 0.06);
+}
+.title {
+  margin: 0 0 6px;
+  font-size: 22px;
+  line-height: 26px;
+  font-weight: 800;
+}
+.metaRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6b7280; /* gray-500 */
+  font-size: 13px;
+}
+.meta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dot {
+  width: 4px;
+  height: 4px;
+  background: #d1d5db; /* gray-300 */
+  border-radius: 999px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid transparent;
+  margin-top: 8px;
+}
+.badgeMuted {
+  background: #fee2e2; /* red-100 */
+  color: #991b1b; /* red-800 */
+  border-color: #fecaca; /* red-200 */
+}
+
+@media (min-width: 1024px) {
+  .banner { height: 260px; }
+  .logoWrap { width: 96px; height: 96px; }
+}

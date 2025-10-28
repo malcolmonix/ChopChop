@@ -1,0 +1,121 @@
+.header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap; /* allow chip to wrap below on small widths */
+  gap: 10px 12px;
+  margin: 10px auto 16px;
+  width: 100%;
+  max-width: 960px;
+  padding: 0 8px;
+}
+
+.searchWrapper {
+  flex: 1 1 420px; /* grow but keep reasonable min width */
+  position: relative;
+  min-width: 260px;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 14px 16px 14px 44px; /* larger touch target */
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  outline: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  background: #fff;
+  position: relative;
+  z-index: 0; /* keep below chip if overlapping */
+  font-size: 16px;
+}
+
+.searchIcon {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  transform: translateY(-50%);
+  color: #6b7280; /* gray-500 */
+}
+
+.locationChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #eef2ff; /* indigo-50 */
+  color: #3730a3; /* indigo-800 */
+  border: 1px solid #c7d2fe; /* indigo-200 */
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+  flex-shrink: 0; /* prevent shrinking into input */
+  z-index: 1; /* ensure above search input */
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 8px;
+}
+
+@media (min-width: 640px) {
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+  .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+.card {
+  display: flex;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+.thumb {
+  width: 80px;
+  height: 80px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cardTitle {
+  font-weight: 600;
+}
+
+.loadMoreWrap {
+  display: flex;
+  justify-content: center;
+  margin: 16px 0 32px;
+}
+
+.loadMoreBtn {
+  background: #111827; /* gray-900 */
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 10px 14px;
+}
+
+.bannerWrap {
+  position: relative;
+}
+
+.lpFloat {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+}
