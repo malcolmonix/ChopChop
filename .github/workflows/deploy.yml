@@ -175,56 +175,80 @@ jobs:
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_rsa
+          echo "${{ secrets.VPS_SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H 145.14.158.29 >> ~/.ssh/known_hosts
           
+      - name: Debug SSH key
+        run: |
+          echo "SSH key file size:"
+          wc -c ~/.ssh/id_rsa
+          echo "SSH key format check:"
+          head -1 ~/.ssh/id_rsa
+          tail -1 ~/.ssh/id_rsa
+          echo "SSH key validation:"
+          ssh-keygen -l -f ~/.ssh/id_rsa || echo "SSH key validation failed"
+          
       - name: Test SSH connection
         run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa root@145.14.158.29 'echo "SSH connection successful"'
+          ssh -v -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/id_rsa root@145.14.158.29 'echo "SSH connection successful"' || {
+            echo "SSH connection failed. Trying alternative approaches..."
+            echo "Checking if password auth is available:"
+            ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o PreferredAuthentications=password root@145.14.158.29 'echo "Password auth works"' || echo "Password auth also failed"
+          }
           
       - name: Deploy to VPS
         run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa root@145.14.158.29 '
-            # Create app directory
-            mkdir -p /opt/chopchop
-            cd /opt/chopchop
-            
-            # Pull latest image
-            docker pull ${{ needs.build.outputs.image-tag }} || echo "Image pull failed, continuing..."
-            
-            # Stop and remove existing container
-            docker stop chopchop-app || true
-            docker rm chopchop-app || true
-            
-            # Run new container
-            docker run -d \
-              --name chopchop-app \
-              --restart unless-stopped \
-              -p 3000:3000 \
-              -e NODE_ENV=production \
-              -e NEXT_PUBLIC_API_URL=http://145.14.158.29:4000/graphql \
-              -e NEXT_PUBLIC_APP_NAME="ChopChop" \
-              ${{ needs.build.outputs.image-tag }} || \
-            echo "Container start failed, trying with latest tag..."
-            
-            # Fallback: try with latest tag
-            docker run -d \
-              --name chopchop-app \
-              --restart unless-stopped \
-              -p 3000:3000 \
-              -e NODE_ENV=production \
-              -e NEXT_PUBLIC_API_URL=http://145.14.158.29:4000/graphql \
-              -e NEXT_PUBLIC_APP_NAME="ChopChop" \
-              ghcr.io/malcolmonix/chopchop:latest || echo "Deployment failed"
-            
-            # Health check
-            sleep 15
-            curl -f http://localhost:3000 || echo "Health check failed"
-            
-            # Clean up old images
-            docker image prune -f --filter "until=24h"
-          '
+          if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/id_rsa root@145.14.158.29 'echo "Connection test"'; then
+            echo "SSH connection successful, proceeding with deployment..."
+            ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa root@145.14.158.29 '
+              # Create app directory
+              mkdir -p /opt/chopchop
+              cd /opt/chopchop
+              
+              # Login to GitHub Container Registry
+              echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+              
+              # Pull latest image
+              docker pull ${{ needs.build.outputs.image-tag }} || docker pull ghcr.io/${{ github.repository_owner }}/chopchop:latest
+              
+              # Stop and remove existing container
+              docker stop chopchop-app || true
+              docker rm chopchop-app || true
+              
+              # Run new container
+              docker run -d \
+                --name chopchop-app \
+                --restart unless-stopped \
+                -p 3000:3000 \
+                -e NODE_ENV=production \
+                -e NEXT_PUBLIC_API_URL=http://145.14.158.29:4000/graphql \
+                -e NEXT_PUBLIC_APP_NAME="ChopChop" \
+                ${{ needs.build.outputs.image-tag }} || \
+              docker run -d \
+                --name chopchop-app \
+                --restart unless-stopped \
+                -p 3000:3000 \
+                -e NODE_ENV=production \
+                -e NEXT_PUBLIC_API_URL=http://145.14.158.29:4000/graphql \
+                -e NEXT_PUBLIC_APP_NAME="ChopChop" \
+                ghcr.io/${{ github.repository_owner }}/chopchop:latest
+              
+              # Health check
+              sleep 15
+              curl -f http://localhost:3000 || echo "Health check failed"
+              
+              # Clean up old images
+              docker image prune -f --filter "until=24h"
+            '
+          else
+            echo "SSH connection failed. Please check:"
+            echo "1. VPS_SSH_KEY secret contains the correct private key"
+            echo "2. The corresponding public key is in ~/.ssh/authorized_keys on the VPS"
+            echo "3. SSH service is running on the VPS"
+            echo "4. The VPS allows root login or the user has proper permissions"
+            exit 1
+          fi
           
       - name: Verify deployment
         run: |
