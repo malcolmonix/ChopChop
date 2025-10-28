@@ -1,0 +1,99 @@
+﻿version: '3.8'
+
+services:
+  chopchop:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chopchop-app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_APP_NAME=ChopChop
+      - NEXT_PUBLIC_API_URL=http://localhost:4000
+      - NEXT_PUBLIC_GRAPHQL_ENDPOINT=http://localhost:4000/graphql
+    depends_on:
+      - api
+    networks:
+      - chopchop-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  api:
+    image: node:18-alpine
+    container_name: chopchop-api
+    working_dir: /app
+    volumes:
+      - ../dev-backend:/app
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=development
+      - PORT=4000
+      - DATABASE_URL=postgresql://chopchop:chopchop123@postgres:5432/chopchop
+      - REDIS_URL=redis://redis:6379
+    command: sh -c "npm install && npm run dev"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - chopchop-network
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: chopchop-postgres
+    environment:
+      - POSTGRES_DB=chopchop
+      - POSTGRES_USER=chopchop
+      - POSTGRES_PASSWORD=chopchop123
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - chopchop-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chopchop -d chopchop"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: chopchop-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - chopchop-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  chopchop-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
