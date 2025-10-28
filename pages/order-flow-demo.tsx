@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { menuverseService } from '../lib/services/menuverse';
+import { menuverseService, Eatery } from '../lib/services/menuverse';
 
 export default function OrderFlowDemo() {
   const [step, setStep] = useState(1);
-  const [restaurants, setRestaurants] = useState([]);
-  const [selectedRestaurant, setSelectedRestaurant] = useState(null);
-  const [menuItems, setMenuItems] = useState([]);
-  const [cart, setCart] = useState([]);
+  const [restaurants, setRestaurants] = useState<Eatery[]>([]);
+  const [selectedRestaurant, setSelectedRestaurant] = useState<Eatery | null>(null);
+  const [menuItems, setMenuItems] = useState<any[]>([]);
+  const [cart, setCart] = useState<any[]>([]);
   const [customer, setCustomer] = useState({
     name: 'John Doe',
     email: 'john@example.com',
     address: '123 Main St, City, State'
   });
-  const [orderId, setOrderId] = useState(null);
+  const [orderId, setOrderId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Step 1: Load restaurants
@@ -62,7 +62,7 @@ export default function OrderFlowDemo() {
 
   // Step 4: Place order
   const placeOrder = async () => {
-    if (cart.length === 0) return;
+    if (cart.length === 0 || !selectedRestaurant) return;
     
     setLoading(true);
     try {
@@ -177,7 +177,7 @@ export default function OrderFlowDemo() {
           )}
 
           {/* Step 2: Menu Selection */}
-          {step === 2 && (
+          {step === 2 && selectedRestaurant && (
             <div className="space-y-6">
               <div className="text-center">
                 <h2 className="text-2xl font-semibold">{selectedRestaurant.name} Menu</h2>
@@ -252,7 +252,7 @@ export default function OrderFlowDemo() {
           )}
 
           {/* Step 3: Order Review */}
-          {step === 3 && (
+          {step === 3 && selectedRestaurant && (
             <div className="space-y-6">
               <h2 className="text-2xl font-semibold text-center">Review Your Order</h2>
               
@@ -325,7 +325,7 @@ export default function OrderFlowDemo() {
               <div className="bg-green-50 border border-green-200 rounded-lg p-6 max-w-md mx-auto">
                 <h3 className="font-semibold mb-2">Order Details</h3>
                 <p className="text-sm text-gray-600 mb-2">Order ID: <span className="font-mono bg-gray-100 px-2 py-1 rounded">{orderId}</span></p>
-                <p className="text-sm text-gray-600 mb-2">Restaurant: {selectedRestaurant.name}</p>
+                <p className="text-sm text-gray-600 mb-2">Restaurant: {selectedRestaurant?.name}</p>
                 <p className="text-sm text-gray-600 mb-2">Customer: {customer.name}</p>
                 <p className="text-sm text-gray-600">Total: ${cart.reduce((total, item) => total + (item.price * item.quantity), 0).toFixed(2)}</p>
               </div>

@@ -2,7 +2,7 @@
 import { UserAddress } from './user-profile';
 import { LocationResult } from './location-service';
 
-interface StoredLocation {
+export interface StoredLocation {
   id: string;
   location: LocationResult;
   timestamp: number;
@@ -84,6 +84,15 @@ class LocationStorageService {
 
   async clearRecentLocations(): Promise<void> {
     localStorage.removeItem(`${this.STORAGE_PREFIX}recent_locations`);
+  }
+
+  async getAllSavedLocations(): Promise<StoredLocation[]> {
+    try {
+      return await this.getRecentLocations();
+    } catch (error) {
+      console.error('Failed to get all saved locations:', error);
+      return [];
+    }
   }
 
   // === Location Cache Management ===

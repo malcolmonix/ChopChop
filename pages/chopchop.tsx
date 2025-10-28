@@ -21,6 +21,7 @@ export default function ChopChopHome() {
   const [loading, setLoading] = useState(false);
   const [customerInfo, setCustomerInfo] = useState({
     name: '',
+    phone: '',
     email: '',
     address: ''
   });
@@ -130,7 +131,7 @@ export default function ChopChopHome() {
         setSelectedRestaurant(null);
         setMenuItems([]);
         setCart([]);
-        setCustomerInfo({ name: '', email: '', address: '' });
+        setCustomerInfo({ name: '', phone: '', email: '', address: '' });
       } else {
         alert('Failed to place order. Please try again.');
       }
@@ -530,6 +531,18 @@ export default function ChopChopHome() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Phone Number
+                      </label>
+                      <input
+                        type="tel"
+                        value={customerInfo.phone}
+                        onChange={(e) => setCustomerInfo({...customerInfo, phone: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        placeholder="Enter your phone number"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
                         Delivery Address
                       </label>
                       <textarea
@@ -546,7 +559,7 @@ export default function ChopChopHome() {
                 {/* Place Order Button */}
                 <button
                   onClick={placeOrder}
-                  disabled={loading || !customerInfo.name || !customerInfo.email || !customerInfo.address || cart.length === 0}
+                  disabled={loading || !customerInfo.name || !customerInfo.phone || !customerInfo.email || !customerInfo.address || cart.length === 0}
                   className="w-full bg-green-600 text-white py-4 px-6 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-bold text-lg"
                 >
                   {loading ? 'Placing Order...' : `Place Order - ₦${calculateTotal().toLocaleString()}`}

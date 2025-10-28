@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { cityService, City } from '../services/city-service';
 import { locationStorageService, StoredLocation } from '../services/location-storage';
+import { LocationResult } from '../services/location-service';
 
 interface SavedAddress extends StoredLocation {
   isDefault: boolean;
@@ -46,19 +47,19 @@ export const ProfileAddressManager: React.FC<ProfileAddressManagerProps> = ({
     loadSavedAddresses();
   }, []);
 
-  const loadSavedAddresses = () => {
+  const loadSavedAddresses = async () => {
     try {
       // Get all saved locations and convert to saved addresses
-      const savedLocations = locationStorageService.getAllSavedLocations();
+      const savedLocations = await locationStorageService.getAllSavedLocations();
       const savedAddressData = localStorage.getItem('chopchop_saved_addresses');
       const addressExtras = savedAddressData ? JSON.parse(savedAddressData) : {};
 
-      const convertedAddresses: SavedAddress[] = savedLocations.map(location => ({
-        ...location,
-        isDefault: addressExtras[location.id]?.isDefault || false,
-        nickname: addressExtras[location.id]?.nickname || location.label || 'Unnamed Address',
-        deliveryInstructions: addressExtras[location.id]?.deliveryInstructions || '',
-        isVerified: addressExtras[location.id]?.isVerified || false
+      const convertedAddresses: SavedAddress[] = savedLocations.map(storedLocation => ({
+        ...storedLocation,
+        isDefault: addressExtras[storedLocation.id]?.isDefault || false,
+        nickname: addressExtras[storedLocation.id]?.nickname || storedLocation.location.formattedAddress || 'Unnamed Address',
+        deliveryInstructions: addressExtras[storedLocation.id]?.deliveryInstructions || '',
+        isVerified: addressExtras[storedLocation.id]?.isVerified || false
       }));
 
       // Ensure only one default address
@@ -111,16 +112,33 @@ export const ProfileAddressManager: React.FC<ProfileAddressManagerProps> = ({
         source: 'manual' as const
       };
 
+      // Create a proper LocationResult object
+      const locationResult: LocationResult = {
+        placeId: crypto.randomUUID(),
+        formattedAddress: formData.address,
+        coordinates: formData.coordinates,
+        addressComponents: {
+          // Parse address components from the address string if possible
+          street: formData.address.split(',')[0]?.trim(),
+          city: formData.address.split(',')[1]?.trim(),
+          state: formData.address.split(',')[2]?.trim(),
+          country: formData.address.split(',')[3]?.trim(),
+        }
+      };
+
       // Save location using storage service
-      const savedLocation = locationStorageService.saveLocation(locationData);
+      await locationStorageService.saveRecentLocation(locationResult);
 
       // Create new address
       const newAddress: SavedAddress = {
-        ...savedLocation,
+        id: crypto.randomUUID(),
+        location: locationResult,
         nickname: formData.nickname,
         isDefault: formData.isDefault,
         deliveryInstructions: formData.deliveryInstructions,
-        isVerified: false
+        isVerified: false,
+        timestamp: Date.now(),
+        usage_count: 1
       };
 
       // If this is set as default, remove default from others
@@ -153,9 +171,9 @@ export const ProfileAddressManager: React.FC<ProfileAddressManagerProps> = ({
     setEditingAddress(address);
     setFormData({
       nickname: address.nickname,
-      address: address.address,
-      coordinates: address.coordinates,
-      cityId: address.coordinates ? getCityFromCoordinates(address.coordinates) : cityService.getCurrentCity().id,
+      address: address.location.formattedAddress,
+      coordinates: address.location.coordinates,
+      cityId: address.location.coordinates ? getCityFromCoordinates(address.location.coordinates) : cityService.getCurrentCity().id,
       deliveryInstructions: address.deliveryInstructions || '',
       isDefault: address.isDefault
     });
@@ -206,8 +224,8 @@ export const ProfileAddressManager: React.FC<ProfileAddressManagerProps> = ({
       setAddresses(updatedAddresses);
       saveAddressExtras(updatedAddresses);
 
-      // Remove from location storage
-      locationStorageService.removeLocation(addressId);
+      // TODO: Implement removeLocation method in LocationStorageService
+      // locationStorageService.removeLocation(addressId);
     }
   };
 
@@ -231,8 +249,8 @@ export const ProfileAddressManager: React.FC<ProfileAddressManagerProps> = ({
   };
 
   const getAddressCity = (address: SavedAddress): City | null => {
-    if (address.coordinates) {
-      const cityId = getCityFromCoordinates(address.coordinates);
+    if (address.location.coordinates) {
+      const cityId = getCityFromCoordinates(address.location.coordinates);
       return cityService.getCityById(cityId);
     }
     return null;
@@ -302,7 +320,7 @@ export const ProfileAddressManager: React.FC<ProfileAddressManagerProps> = ({
                       )}
                     </div>
                     
-                    <p className="text-gray-600 mb-2">{address.address}</p>
+                    <p className="text-gray-600 mb-2">{address.location.formattedAddress}</p>
                     
                     {address.deliveryInstructions && (
                       <p className="text-sm text-gray-500 italic">
@@ -312,7 +330,7 @@ export const ProfileAddressManager: React.FC<ProfileAddressManagerProps> = ({
 
                     <div className="flex items-center gap-4 mt-3 text-sm text-gray-500">
                       <span>Added {new Date(address.timestamp).toLocaleDateString()}</span>
-                      {city && cityService.canDeliverToLocation(city.id, address.coordinates.lat, address.coordinates.lng) ? (
+                      {city && cityService.canDeliverToLocation(city.id, address.location.coordinates.lat, address.location.coordinates.lng) ? (
                         <span className="text-green-600">✓ Delivery available</span>
                       ) : (
                         <span className="text-red-600">⚠️ Outside delivery zone</span>

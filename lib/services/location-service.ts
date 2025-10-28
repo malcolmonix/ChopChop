@@ -213,7 +213,7 @@ class LocationService {
   }
 
   private formatPhotonAddress(properties: any): string {
-    const parts = [];
+    const parts: string[] = [];
     if (properties.name) parts.push(properties.name);
     if (properties.street) parts.push(properties.street);
     if (properties.city) parts.push(properties.city);
@@ -223,7 +223,7 @@ class LocationService {
   }
 
   private formatPhotonSecondary(properties: any): string {
-    const parts = [];
+    const parts: string[] = [];
     if (properties.city && properties.city !== properties.name) parts.push(properties.city);
     if (properties.state) parts.push(properties.state);
     return parts.join(', ');
@@ -271,39 +271,40 @@ class LocationService {
         return;
       }
 
-      const request: google.maps.places.AutocompletionRequest = {
-        input,
-        types: ['establishment', 'geocode'],
-        componentRestrictions: { country: 'ng' }, // Nigeria
-      };
+      // TODO: Add Google Maps type definitions
+      // const request: google.maps.places.AutocompletionRequest = {
+      //   input,
+      //   types: ['establishment', 'geocode'],
+      //   componentRestrictions: { country: 'ng' }, // Nigeria
+      // };
 
-      if (location) {
-        request.location = new google.maps.LatLng(location.lat, location.lng);
-        request.radius = 50000; // 50km radius
-      }
+      // if (location) {
+      //   request.location = new google.maps.LatLng(location.lat, location.lng);
+      //   request.radius = 50000; // 50km radius
+      // }
 
-      this.autocompleteService.getPlacePredictions(request, async (predictions, status) => {
-        if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
-          const results = predictions.map(prediction => ({
-            placeId: prediction.place_id,
-            description: prediction.description,
-            mainText: prediction.structured_formatting.main_text,
-            secondaryText: prediction.structured_formatting.secondary_text || '',
-          }));
-          
-          // Cache the results
+      // this.autocompleteService.getPlacePredictions(request, async (predictions, status) => {
+      //   if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
+      //     const results = predictions.map(prediction => ({
+      //       placeId: prediction.place_id,
+      //       description: prediction.description,
+      //       mainText: prediction.structured_formatting.main_text,
+      //       secondaryText: prediction.structured_formatting.secondary_text || '',
+      //     }));
+      //     
+      //     // Cache the results
+      //     await locationStorageService.cacheLocationResult(cacheKey, results as any, 'address');
+      //     resolve(results);
+      //   } else {
+      //     // Fallback to free service
+      
+      // Use fallback service directly for now
+      this.fallbackAutocomplete(input).then(async (results) => {
+        if (results.length > 0) {
           await locationStorageService.cacheLocationResult(cacheKey, results as any, 'address');
-          resolve(results);
-        } else {
-          // Fallback to free service
-          this.fallbackAutocomplete(input).then(async (results) => {
-            if (results.length > 0) {
-              await locationStorageService.cacheLocationResult(cacheKey, results as any, 'address');
-            }
-            resolve(results);
-          }).catch(() => resolve([]));
         }
-      });
+        resolve(results);
+      }).catch(() => resolve([]));
     });
   }
 

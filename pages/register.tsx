@@ -40,7 +40,7 @@ export default function RegisterPage() {
       },
       confirmPassword: {
         required: 'Please confirm your password',
-        validate: (value, values) => value === values.password || 'Passwords do not match',
+        validate: (value) => value === form.values.password || 'Passwords do not match',
       },
     }
   );
@@ -49,7 +49,7 @@ export default function RegisterPage() {
     e.preventDefault();
 
     if (!form.validateAll()) {
-      showToast('Please fix form errors', 'error');
+      showToast('error', 'Please fix form errors');
       return;
     }
 
@@ -64,13 +64,13 @@ export default function RegisterPage() {
       });
 
       if (data?.register) {
-        showToast('Account created successfully! Please sign in.', 'success');
+        showToast('success', 'Account created successfully! Please sign in.');
         router.push('/login');
       }
     } catch (error: any) {
       console.error('Registration error:', error);
       const message = error.message || 'Failed to create account';
-      showToast(message, 'error');
+      showToast('error', message);
     }
   };
 
@@ -248,3 +248,10 @@ export default function RegisterPage() {
     </div>
   );
 }
+
+// Prevent static generation for this page since it uses Apollo Client
+export const getServerSideProps = async () => {
+  return {
+    props: {}
+  };
+};
