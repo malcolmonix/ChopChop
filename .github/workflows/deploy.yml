@@ -173,13 +173,19 @@ jobs:
         uses: actions/checkout@v4
         
       - name: Setup SSH key
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H 145.14.158.29 >> ~/.ssh/known_hosts
+          
+      - name: Test SSH connection
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa root@145.14.158.29 'echo "SSH connection successful"'
           
       - name: Deploy to VPS
         run: |
-          ssh -o StrictHostKeyChecking=no root@145.14.158.29 '
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa root@145.14.158.29 '
             # Create app directory
             mkdir -p /opt/chopchop
             cd /opt/chopchop
