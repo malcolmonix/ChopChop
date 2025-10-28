@@ -9,7 +9,11 @@ on:
 env:
   NODE_VERSION: 18
   REGISTRY: ghcr.io
-  IMAGE_NAME: malcolmonix/chopchop
+  IMAGE_NAME: ${{ github.repository_owner }}/chopchop
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   test:
