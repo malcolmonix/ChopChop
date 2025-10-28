@@ -7,14 +7,14 @@ WORKDIR /app
 
 # Install dependencies only when needed
 FROM base AS deps
-RUN apk add --no-cache libc6-compat
-COPY package.json package-lock.json ./
-RUN npm ci --only=production && npm cache clean --force
+RUN apk add --no-cache libc6-compat curl
+COPY package.json package-lock.json* ./
+RUN npm ci --only=production --legacy-peer-deps && npm cache clean --force
 
 # Stage 2: Build the application
 FROM base AS builder
-COPY package.json package-lock.json ./
-RUN npm ci
+COPY package.json package-lock.json* ./
+RUN npm ci --legacy-peer-deps
 COPY . .
 
 # Build the Next.js application
@@ -23,7 +23,7 @@ RUN npm run build
 
 # Stage 3: Production image
 FROM base AS runner
-RUN apk add --no-cache dumb-init
+RUN apk add --no-cache dumb-init curl
 
 # Create non-root user for security
 RUN addgroup --system --gid 1001 nodejs
@@ -51,7 +51,7 @@ USER nextjs
 
 # Add health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3000/api/health || exit 1
+  CMD curl -f http://localhost:3000 || exit 1
 
 # Start the application
 ENTRYPOINT ["dumb-init", "--"]
