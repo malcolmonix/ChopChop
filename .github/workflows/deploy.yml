@@ -83,7 +83,6 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: http://localhost:4000/graphql
           NEXT_PUBLIC_APP_NAME: ChopChop
-          # Firebase envs for client/runtime tests
           NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
           NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
           NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
@@ -130,7 +129,6 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: http://145.14.158.29:4000/graphql
           NEXT_PUBLIC_APP_NAME: ChopChop
-          # Ensure Firebase variables are present at build time so the client bundle is correct
           NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
           NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
           NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
@@ -210,68 +208,45 @@ jobs:
             echo "Checking if password auth is available:"
             ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o PreferredAuthentications=password root@145.14.158.29 'echo "Password auth works"' || echo "Password auth also failed"
           }
-          
+
       - name: Deploy to VPS
+        env:
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
         run: |
           if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/id_rsa root@145.14.158.29 'echo "Connection test"'; then
             echo "SSH connection successful, proceeding with deployment..."
-            ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa root@145.14.158.29 '
-              # Create app directory
-              mkdir -p /opt/chopchop
-              cd /opt/chopchop
-              
-              # Login to GitHub Container Registry
-              echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-              
-              # Pull latest image
+            ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa root@145.14.158.29 "
+              mkdir -p /opt/chopchop && cd /opt/chopchop
+
+              echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
               docker pull ${{ needs.build.outputs.image-tag }} || docker pull ghcr.io/${{ github.repository_owner }}/chopchop:latest
-              
-              # Stop and remove existing container
+
               docker stop chopchop-app || true
               docker rm chopchop-app || true
-              
-              # Run new container (include Firebase envs in case server/runtime needs them)
-              docker run -d \
-              --name chopchop-app \
-                --restart unless-stopped \
-                -p 3000:3000 \
+
+              docker run -d --name chopchop-app --restart unless-stopped -p 3000:3000 \
                 -e NODE_ENV=production \
-                -e NEXT_PUBLIC_API_KEY="${{ secrets.NEXT_PUBLIC_API_KEY }}" \
-                -e NEXT_PUBLIC_FIREBASE_API_KEY="${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}" \
-                -e NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}" \
-                -e NEXT_PUBLIC_FIREBASE_PROJECT_ID="${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}" \
-                -e NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}" \
-                -e NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}" \
-                -e NEXT_PUBLIC_FIREBASE_APP_ID="${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}" \
+                -e NEXT_PUBLIC_API_URL=http://145.14.158.29:4000/graphql \
+                -e NEXT_PUBLIC_APP_NAME='ChopChop' \
+                -e NEXT_PUBLIC_FIREBASE_API_KEY='${NEXT_PUBLIC_FIREBASE_API_KEY}' \
+                -e NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN='${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN}' \
+                -e NEXT_PUBLIC_FIREBASE_PROJECT_ID='${NEXT_PUBLIC_FIREBASE_PROJECT_ID}' \
+                -e NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET='${NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}' \
+                -e NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID='${NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID}' \
+                -e NEXT_PUBLIC_FIREBASE_APP_ID='${NEXT_PUBLIC_FIREBASE_APP_ID}' \
                 ${{ needs.build.outputs.image-tag }}
-                echo "API_KEY: $NEXT_PUBLIC_FIREBASE_API_KEY"
-                echo "AUTH_DOMAIN: $NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN"
-                echo "PROJECT_ID: $NEXT_PUBLIC_FIREBASE_PROJECT_ID"
-                echo "STORAGE_BUCKET: $NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET"
-                echo "MESSAGING_SENDER_ID: $NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID"
-                echo "APP_ID: $NEXT_PUBLIC_FIREBASE_APP_ID"
-                docker run -d \\
-                --name chopchop-app \\
-                --restart unless-stopped \\
-                -p 3000:3000 \\
-                -e NODE_ENV=production \\
-                -e NEXT_PUBLIC_API_URL=http://145.14.158.29:4000/graphql \\
-                -e NEXT_PUBLIC_APP_NAME="ChopChop" \\
-                -e NEXT_PUBLIC_FIREBASE_API_KEY="${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}" \\
-                -e NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}" \\
-                -e NEXT_PUBLIC_FIREBASE_PROJECT_ID="${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}" \\
-                -e NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}" \\
-                -e NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}" \\
-                -e NEXT_PUBLIC_FIREBASE_APP_ID="${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}" \\
-                ghcr.io/${{ github.repository_owner }}/chopchop:latest
-              
-              # Health check (server-side quick check)
+
               sleep 15
-              curl -f http://localhost:3000 || echo "Health check failed"
-              
-              # Clean up old images
-              docker image prune -f --filter "until=24h"
-            '
+              curl -f http://localhost:3000 || echo 'Health check failed'
+
+              docker image prune -f --filter 'until=24h'
+            "
           else
             echo "SSH connection failed. Please check:"
             echo "1. VPS_SSH_KEY secret contains the correct private key"
