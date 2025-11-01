@@ -7,7 +7,7 @@
 
 ---
 
-## Step 2: Add Secrets (3 items)
+## Step 2: Add Secrets (3 items) ⚠️ CRITICAL
 
 Click **"New repository secret"** for each:
 
@@ -22,9 +22,9 @@ Click **"New repository secret"** for each:
 
 ---
 
-## Step 3: Add Variables (10 items)
+## Step 3: Add Variables (10 items) ⚠️ CRITICAL
 
-Click **"Variables"** tab, then **"New repository variable"** for each:
+Click **"Variables"** tab (next to Secrets), then **"New repository variable"** for each:
 
 - [ ] **NEXT_PUBLIC_SERVER_URL**
   - Value: `http://145.14.158.29:4000/`
@@ -58,18 +58,35 @@ Click **"Variables"** tab, then **"New repository variable"** for each:
 
 ---
 
+## ⚠️ IMPORTANT: These MUST be set before deployment works!
+
+The Docker build now requires these variables at build-time. If any are missing:
+- ❌ Build will fail with validation error
+- ❌ App will show "Firebase configuration is incomplete" error
+- ❌ Users will see "Oops! Something went wrong"
+
+**After adding all secrets/variables:**
+1. Go to Actions tab
+2. Re-run the latest failed workflow
+3. Deployment should succeed! ✅
+
+---
+
 ## Step 4: Deploy
 
-- [ ] Commit and push the updated workflow:
+Once all 13 items are added:
+
+- [ ] The next push to main will automatically deploy
+  
+  **OR** manually trigger:
   ```bash
-  git add .github/workflows/deploy.yml GITHUB-ENV-SETUP.md GITHUB-SETUP-CHECKLIST.md
-  git commit -m "fix: pass all environment variables to Docker container"
+  git commit --allow-empty -m "trigger deploy with env vars"
   git push origin main
   ```
 
 - [ ] Watch the Actions tab for successful deployment
 
-- [ ] Verify health check passes: http://145.14.158.29:3000
+- [ ] Verify app works: http://145.14.158.29:3000
 
 ---
 
@@ -82,15 +99,21 @@ ssh root@145.14.158.29 "docker ps | grep chopchop"
 # View container logs
 ssh root@145.14.158.29 "docker logs chopchop-app --tail 50"
 
-# Check environment variables in container
+# Check environment variables in container (server-side only - client vars are baked into bundle)
 ssh root@145.14.158.29 "docker exec chopchop-app env | grep -E 'NEXT_PUBLIC|NEXTAUTH'"
 
 # Test health check
-curl -f http://145.14.158.29:3000
+curl -f http://145.14.158.29:3000/api/health
 ```
 
 ---
 
 ## 🎯 Total: 3 Secrets + 10 Variables = 13 Items
 
-Once all checkboxes are marked, push your changes and the deployment should succeed! ✨
+Once all checkboxes are marked and you push, the deployment will:
+- ✅ Build with Firebase config embedded in client bundle
+- ✅ Deploy container with all runtime env vars
+- ✅ App loads without errors
+- ✅ Firebase Auth works correctly
+
+**Status**: Waiting for GitHub Secrets/Variables to be configured! 🚀

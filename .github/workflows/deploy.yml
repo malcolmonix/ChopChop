@@ -146,6 +146,38 @@ jobs:
             type=ref,event=pr
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
+      
+      - name: Validate build-time environment variables
+        run: |
+          echo "Validating required environment variables for Docker build..."
+          missing=()
+          
+          # Check secrets
+          [ -z "${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}" ] && missing+=("NEXT_PUBLIC_FIREBASE_API_KEY (secret)")
+          [ -z "${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}" ] && missing+=("NEXT_PUBLIC_FIREBASE_APP_ID (secret)")
+          [ -z "${{ secrets.NEXTAUTH_SECRET }}" ] && missing+=("NEXTAUTH_SECRET (secret)")
+          
+          # Check variables
+          [ -z "${{ vars.NEXT_PUBLIC_APP_NAME }}" ] && missing+=("NEXT_PUBLIC_APP_NAME (variable)")
+          [ -z "${{ vars.NEXT_PUBLIC_API_URL }}" ] && missing+=("NEXT_PUBLIC_API_URL (variable)")
+          [ -z "${{ vars.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}" ] && missing+=("NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN (variable)")
+          [ -z "${{ vars.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}" ] && missing+=("NEXT_PUBLIC_FIREBASE_PROJECT_ID (variable)")
+          [ -z "${{ vars.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}" ] && missing+=("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET (variable)")
+          [ -z "${{ vars.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}" ] && missing+=("NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID (variable)")
+          
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "❌ ERROR: Missing required environment variables:"
+            printf '  - %s\n' "${missing[@]}"
+            echo ""
+            echo "Please configure these in GitHub repository settings:"
+            echo "  Secrets: https://github.com/${{ github.repository }}/settings/secrets/actions"
+            echo "  Variables: https://github.com/${{ github.repository }}/settings/variables/actions"
+            echo ""
+            echo "See GITHUB-SETUP-CHECKLIST.md for complete setup instructions."
+            exit 1
+          fi
+          
+          echo "✅ All required environment variables are configured"
             
       - name: Build and push Docker image
         id: build
