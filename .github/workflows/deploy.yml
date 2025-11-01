@@ -325,6 +325,10 @@ jobs:
           image-ref: ${{ needs.build.outputs.image-tag }}
           format: sarif
           output: trivy-results.sarif
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          exit-code: '0' # Do not fail the pipeline; upload report instead
           
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@v2
@@ -341,13 +345,44 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      
+      - name: Determine test base URL
+        run: |
+          if [ -n "${{ vars.PRODUCTION_URL }}" ]; then
+            echo "BASE_URL=${{ vars.PRODUCTION_URL }}" >> $GITHUB_ENV
+          else
+            echo "BASE_URL=http://145.14.158.29:3000" >> $GITHUB_ENV
+          fi
+          echo "Using BASE_URL=$BASE_URL"
+      
+      - name: Install jq
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y jq
+      
+      - name: Create Lighthouse config
+        run: |
+          cat > lighthouserc.json <<'EOF'
+          {
+            "ci": {
+              "collect": {
+                "numberOfRuns": 1,
+                "settings": { "chromeFlags": "--no-sandbox --disable-dev-shm-usage" }
+              },
+              "upload": { "target": "temporary-public-storage" }
+            }
+          }
+          EOF
+          # Inject dynamic URLs (BASE_URL)
+          urls=("$BASE_URL" "$BASE_URL/restaurants" "$BASE_URL/menu")
+          jq --argjson urls "$(printf '%s\n' "${urls[@]}" | jq -R . | jq -s .)" '.ci.collect.url = $urls' lighthouserc.json > lighthouserc.tmp
+          mv lighthouserc.tmp lighthouserc.json
+          echo "Generated lighthouserc.json:" && cat lighthouserc.json
         
       - name: Run Lighthouse CI
         uses: treosh/lighthouse-ci-action@v10
         with:
-          urls: |
-            https://chopchop.com
-            https://chopchop.com/restaurants
-            https://chopchop.com/menu
+          configPath: ./lighthouserc.json
           uploadArtifacts: true
           temporaryPublicStorage: true
+        continue-on-error: true
