@@ -1,88 +1,62 @@
-﻿# ChopChop Customer App Dockerfile
-# Multi-stage build for production optimization
-
-# Stage 1: Base image with dependencies
+# Multi-stage build for Web Application
 FROM node:18-alpine AS base
-WORKDIR /app
 
 # Install dependencies only when needed
 FROM base AS deps
-RUN apk add --no-cache libc6-compat curl
-COPY package.json package-lock.json* ./
-RUN npm ci --only=production --legacy-peer-deps && npm cache clean --force
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
 
-# Stage 2: Build the application
+# Install dependencies based on the preferred package manager
+COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* ./
+RUN \
+  if [ -f yarn.lock ]; then yarn --frozen-lockfile; \
+  elif [ -f package-lock.json ]; then npm ci; \
+  elif [ -f pnpm-lock.yaml ]; then yarn global add pnpm && pnpm i --frozen-lockfile; \
+  else echo "Lockfile not found." && exit 1; \
+  fi
+
+# Rebuild the source code only when needed
 FROM base AS builder
-COPY package.json package-lock.json* ./
-RUN npm ci --legacy-peer-deps
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Inject build-time public env vars (used by Next.js client bundle)
-ARG NEXT_PUBLIC_APP_NAME
-ARG NEXT_PUBLIC_API_URL
-ARG NEXT_PUBLIC_GRAPHQL_ENDPOINT
-ARG NEXT_PUBLIC_SERVER_URL
-ARG NEXT_PUBLIC_FIREBASE_API_KEY
-ARG NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-ARG NEXT_PUBLIC_FIREBASE_PROJECT_ID
-ARG NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-ARG NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-ARG NEXT_PUBLIC_FIREBASE_APP_ID
-ARG NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+# Disable telemetry during the build
+ENV NEXT_TELEMETRY_DISABLED 1
 
-ENV NEXT_PUBLIC_APP_NAME=$NEXT_PUBLIC_APP_NAME \
-  NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
-  NEXT_PUBLIC_GRAPHQL_ENDPOINT=$NEXT_PUBLIC_GRAPHQL_ENDPOINT \
-  NEXT_PUBLIC_SERVER_URL=$NEXT_PUBLIC_SERVER_URL \
-  NEXT_PUBLIC_FIREBASE_API_KEY=$NEXT_PUBLIC_FIREBASE_API_KEY \
-  NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=$NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN \
-  NEXT_PUBLIC_FIREBASE_PROJECT_ID=$NEXT_PUBLIC_FIREBASE_PROJECT_ID \
-  NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET \
-  NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=$NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID \
-  NEXT_PUBLIC_FIREBASE_APP_ID=$NEXT_PUBLIC_FIREBASE_APP_ID \
-  NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=$NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID \
-  NEXT_TELEMETRY_DISABLED=1
-
-# Build the Next.js application
+# Build the application
 RUN npm run build
 
-# Stage 3: Production image
+# Production image
 FROM base AS runner
-RUN apk add --no-cache dumb-init curl
+WORKDIR /app
 
-# Create non-root user for security
+ENV NODE_ENV production
+ENV NEXT_TELEMETRY_DISABLED 1
+
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copy built application
+# Copy public assets
 COPY --from=builder /app/public ./public
+
+# Set the correct permission for prerender cache
+RUN mkdir .next
+RUN chown nextjs:nodejs .next
+
+# Copy built application
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Copy production dependencies
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
+USER nextjs
 
-# Set environment variables
-ENV NODE_ENV production
-ENV NEXT_TELEMETRY_DISABLED 1
+EXPOSE 3000
+
 ENV PORT 3000
 ENV HOSTNAME "0.0.0.0"
 
-# Expose port
-EXPOSE 3000
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/api/health || exit 1
 
-# Switch to non-root user
-USER nextjs
-
-# Add health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3000 || exit 1
-
-# Start the application
-ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "server.js"]
-
-# Metadata
-LABEL maintainer="ChopChop Team <support@chopchop.com>"
-LABEL version="1.0.0"
-LABEL description="ChopChop Customer Food Delivery App"

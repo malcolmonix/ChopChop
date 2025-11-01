@@ -56,9 +56,7 @@ export const ModernLocationPicker: React.FC<ModernLocationPickerProps> = ({
   // Initialize map when tab switches to map
   useEffect(() => {
     if (activeTab === 'map' && !mapLoaded) {
-      // TODO: Implement initializeMap function
-      // initializeMap();
-      setMapLoaded(true);
+      initializeMap();
     }
   }, [activeTab]);
 
