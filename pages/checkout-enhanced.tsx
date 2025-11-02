@@ -178,37 +178,13 @@ function CheckoutPage() {
     setIsPlacingOrder(true);
 
     try {
-      const variables = {
-        restaurant: String(state.restaurantId),
-        orderInput: state.items.map((item) => ({
-          title: item.title || item.name,
-          quantity: item.quantity,
-          price: item.price
-        })),
-        paymentMethod: selectedPayment.type.toUpperCase(),
-        couponCode: null,
-        tipping: tip,
-        taxationAmount: tax,
-        address: {
-          deliveryAddress: `${selectedAddress.addressLine1}, ${selectedAddress.city}`,
-          latitude: selectedAddress.latitude,
-          longitude: selectedAddress.longitude
-        },
-        orderDate: new Date().toISOString(),
-        isPickedUp: false,
-        deliveryCharges: deliveryFee,
-        instructions: orderInstructions || null
-      };
-
-      const response = await client.mutate({
-        mutation: PLACE_ORDER,
-        variables
-      });
-
-      setOrderResult(response.data.placeOrder);
-      setCurrentStep('confirmation');
-      clear();
-      showToast('success', 'Order placed successfully!');
+      // For "Pay on Delivery" - process order immediately
+      if (selectedPayment.type === 'cash') {
+        await processOrderDirectly();
+      } else {
+        // For other payment methods - initiate payment flow
+        await initiatePaymentFlow();
+      }
     } catch (error: any) {
       console.error('Order placement error:', error);
       showToast('error', error.message || 'Failed to place order');
@@ -217,11 +193,128 @@ function CheckoutPage() {
     }
   };
 
+  const processOrderDirectly = async () => {
+    const variables = {
+      restaurant: String(state.restaurantId),
+      orderInput: state.items.map((item) => ({
+        title: item.title || item.name,
+        quantity: item.quantity,
+        price: item.price
+      })),
+      paymentMethod: selectedPayment!.type.toUpperCase(),
+      couponCode: null,
+      tipping: tip,
+      taxationAmount: tax,
+      address: {
+        deliveryAddress: `${selectedAddress!.addressLine1}, ${selectedAddress!.city}`,
+        latitude: selectedAddress!.latitude,
+        longitude: selectedAddress!.longitude
+      },
+      orderDate: new Date().toISOString(),
+      isPickedUp: false,
+      deliveryCharges: deliveryFee,
+      instructions: orderInstructions || null
+    };
+
+    const response = await client.mutate({
+      mutation: PLACE_ORDER,
+      variables
+    });
+
+    setOrderResult(response.data.placeOrder);
+    setCurrentStep('confirmation');
+    clear();
+    showToast('success', 'Order placed successfully!');
+  };
+
+  const initiatePaymentFlow = async () => {
+    const totalAmount = finalTotal;
+    
+    switch (selectedPayment!.type) {
+      case 'card':
+        await processCardPayment(totalAmount);
+        break;
+      case 'wallet':
+        await processMobileMoneyPayment(totalAmount);
+        break;
+      case 'bank':
+        await processBankTransferPayment(totalAmount);
+        break;
+      default:
+        throw new Error('Unsupported payment method');
+    }
+  };
+
+  const processCardPayment = async (amount: number) => {
+    showToast('info', 'Redirecting to card payment...');
+    
+    // TODO: Integrate with payment gateway (Paystack, Flutterwave, etc.)
+    // For now, simulate payment flow
+    setTimeout(async () => {
+      try {
+        // Simulate payment success
+        const paymentSuccessful = confirm('Payment simulation: Click OK for success, Cancel for failure');
+        
+        if (paymentSuccessful) {
+          await processOrderDirectly();
+        } else {
+          throw new Error('Payment was declined');
+        }
+      } catch (error) {
+        showToast('error', 'Payment failed. Please try again.');
+        setCurrentStep('payment');
+      }
+    }, 2000);
+  };
+
+  const processMobileMoneyPayment = async (amount: number) => {
+    showToast('info', 'Initiating mobile money payment...');
+    
+    // TODO: Integrate with MTN MoMo, Airtel Money APIs
+    setTimeout(async () => {
+      try {
+        const paymentSuccessful = confirm('Mobile Money simulation: Click OK for success, Cancel for failure');
+        
+        if (paymentSuccessful) {
+          await processOrderDirectly();
+        } else {
+          throw new Error('Mobile money payment failed');
+        }
+      } catch (error) {
+        showToast('error', 'Mobile money payment failed. Please try again.');
+        setCurrentStep('payment');
+      }
+    }, 2000);
+  };
+
+  const processBankTransferPayment = async (amount: number) => {
+    showToast('info', 'Generating bank transfer details...');
+    
+    // TODO: Generate bank transfer instructions
+    setTimeout(async () => {
+      try {
+        const transferConfirmed = confirm(
+          `Bank Transfer Details:\nAccount: 1234567890\nBank: ChopChop Bank\nAmount: ₦${amount.toLocaleString()}\n\nClick OK when transfer is complete`
+        );
+        
+        if (transferConfirmed) {
+          await processOrderDirectly();
+        } else {
+          throw new Error('Bank transfer not completed');
+        }
+      } catch (error) {
+        showToast('error', 'Bank transfer verification failed. Please try again.');
+        setCurrentStep('payment');
+      }
+    }, 2000);
+  };
+
   const renderStepIndicator = () => {
     const steps = [
       { id: 'cart', label: 'Cart Review', icon: '🛒' },
       { id: 'address', label: 'Delivery', icon: '📍' },
       { id: 'payment', label: 'Payment', icon: '💳' },
+      { id: 'payment-processing', label: 'Processing', icon: '⏳' },
       { id: 'confirmation', label: 'Confirm', icon: '✅' }
     ];
 
@@ -253,6 +346,30 @@ function CheckoutPage() {
       </div>
     );
   };
+
+  if (currentStep === 'payment-processing') {
+    return (
+      <div className="min-h-screen bg-gray-50 py-8">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+          {renderStepIndicator()}
+          <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+            <div className="w-16 h-16 mx-auto mb-4 bg-blue-100 rounded-full flex items-center justify-center">
+              <span className="text-3xl animate-spin">⏳</span>
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Processing Payment</h1>
+            <p className="text-gray-600 mb-4">
+              Please wait while we process your payment...
+            </p>
+            <div className="bg-gray-50 rounded-lg p-4 mb-6">
+              <div className="text-sm text-gray-600">Payment Method</div>
+              <div className="text-lg font-bold text-gray-900">{selectedPayment?.name}</div>
+              <div className="text-sm text-gray-600 mt-2">Amount: ₦{finalTotal.toLocaleString()}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (currentStep === 'confirmation' && orderResult) {
     return (

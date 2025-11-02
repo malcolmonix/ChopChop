@@ -11,8 +11,8 @@ interface SEOProps {
 }
 
 const defaultMeta = {
-  title: 'Enatega - Food Delivery Multi-Vendor Platform',
-  description: 'Order delicious food from your favorite restaurants with Enatega. Fast delivery, multiple cuisines, and great deals.',
+  title: 'ChopChop - Food Delivery Multi-Vendor Platform',
+  description: 'Order delicious food from your favorite restaurants with ChopChop. Fast delivery, multiple cuisines, and great deals.',
   keywords: ['food delivery', 'restaurant', 'order food online', 'food ordering', 'delivery service'],
   image: '/og-image.jpg',
   url: process.env.NEXT_PUBLIC_WEBSITE_URL || 'http://localhost:3000',
@@ -27,7 +27,7 @@ export function generateSEOMetadata({
   type = 'website',
   noIndex = false,
 }: SEOProps = {}): Metadata {
-  const metaTitle = title ? `${title} | Enatega` : defaultMeta.title;
+  const metaTitle = title ? `${title} | ChopChop` : defaultMeta.title;
   const metaDescription = description || defaultMeta.description;
   const metaKeywords = keywords || defaultMeta.keywords;
   const metaImage = image || defaultMeta.image;
@@ -43,7 +43,7 @@ export function generateSEOMetadata({
       title: metaTitle,
       description: metaDescription,
       url: metaUrl,
-      siteName: 'Enatega',
+      siteName: 'ChopChop',
       images: [
         {
           url: metaImage,

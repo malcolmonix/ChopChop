@@ -18,7 +18,7 @@ const CREATE_ORDER = gql`
   }
 `;
 
-// Richer order mutation aligned with Enatega's signature (server implemented in sqlite-backend)
+// Richer order mutation aligned with the platform's signature (server implemented in sqlite-backend)
 const PLACE_ORDER = gql`
   mutation PlaceOrder(
     $restaurant: String!
