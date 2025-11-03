@@ -23,7 +23,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build arguments for environment variables
+# Build arguments for environment variables (for compatibility)
 ARG NEXT_PUBLIC_APP_NAME
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_GRAPHQL_ENDPOINT
@@ -36,7 +36,7 @@ ARG NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
 ARG NEXT_PUBLIC_FIREBASE_APP_ID
 ARG NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 
-# Set environment variables from build arguments
+# Set environment variables from build arguments (for compatibility)
 ENV NEXT_PUBLIC_APP_NAME=$NEXT_PUBLIC_APP_NAME
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_GRAPHQL_ENDPOINT=$NEXT_PUBLIC_GRAPHQL_ENDPOINT
@@ -52,8 +52,8 @@ ENV NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=$NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 # Disable telemetry during the build
 ENV NEXT_TELEMETRY_DISABLED 1
 
-# Build the application
-RUN npm run build
+# Skip build if .next directory already exists (pre-built)
+RUN if [ ! -d ".next" ]; then npm run build; fi
 
 # Production image
 FROM base AS runner
