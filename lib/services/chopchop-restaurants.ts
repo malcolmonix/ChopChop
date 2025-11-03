@@ -96,12 +96,30 @@ export class ChopChopRestaurantService {
       const querySnapshot = await getDocs(eateriesToQuery);
       const restaurants: ChopChopRestaurant[] = [];
       
+      // Restaurant names to use instead of "Demo Restaurant"
+      const realRestaurantNames = [
+        'Mama Cass Kitchen',
+        'KFC Lagos',
+        'Dominos Pizza', 
+        'Mr. Biggs',
+        'Sweet Sensation',
+        'Chicken Republic',
+        'Tantalizers'
+      ];
+      
+      let index = 0;
       querySnapshot.forEach((doc) => {
         const data = doc.data();
         
+        // Use real restaurant name instead of "Demo Restaurant"
+        const restaurantName = data.name === 'Demo Restaurant' ? 
+          realRestaurantNames[index % realRestaurantNames.length] : 
+          data.name;
+        
         // Filter by search term if provided
-        if (searchTerm && !data.name.toLowerCase().includes(searchTerm.toLowerCase()) 
+        if (searchTerm && !restaurantName.toLowerCase().includes(searchTerm.toLowerCase()) 
             && !data.description.toLowerCase().includes(searchTerm.toLowerCase())) {
+          index++;
           return;
         }
         
@@ -114,7 +132,7 @@ export class ChopChopRestaurantService {
         
         restaurants.push({
           id: doc.id,
-          name: data.name,
+          name: restaurantName, // Use the real restaurant name
           description: data.description,
           logoUrl: data.logoUrl,
           bannerUrl: data.bannerUrl,
@@ -125,6 +143,8 @@ export class ChopChopRestaurantService {
           deliveryFee,
           isOpen: true
         });
+        
+        index++; // Increment index for restaurant name rotation
       });
 
       // Sort by rating (highest first)

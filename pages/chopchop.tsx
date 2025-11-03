@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Head from 'next/head';
 import { useChopChopRestaurants, useChopChopRestaurantSearch, useChopChopRestaurantMenu } from '../lib/hooks/use-chopchop-restaurants';
 import { ChopChopRestaurant, ChopChopMenuItem, ChopChopOrderItem, chopChopRestaurantService } from '../lib/services/chopchop-restaurants';
+import { OrderService } from '../lib/firebase/orders';
 import ChopChopRestaurantCard from '../components/ChopChopRestaurantCard';
 import ChopChopSearchBar from '../components/ChopChopSearchBar';
 import HeroBanner from '../components/HeroBanner';
@@ -112,19 +113,33 @@ export default function ChopChopHome() {
     try {
       setLoading(true);
       
-      const orderData = {
-        restaurantId: selectedRestaurant.id,
-        customer: customerInfo,
-        items: cart,
-        totalAmount: calculateTotal(),
-        status: 'pending' as const,
-        timestamp: new Date()
-      };
-
-      const orderId = await chopChopRestaurantService.placeOrder(selectedRestaurant.id, orderData);
+      // Use the enhanced OrderService that includes customer sync
+      const result = await OrderService.placeOrder({
+        restaurant: parseInt(selectedRestaurant.id), // Convert to number as expected
+        restaurantName: selectedRestaurant.name, // Pass the actual restaurant name
+        orderInput: cart.map(item => ({
+          title: item.name,
+          quantity: item.quantity,
+          price: item.price
+        })),
+        paymentMethod: 'CASH', // Default for now - in real app this would be selected
+        address: {
+          deliveryAddress: customerInfo.address
+        },
+        customer: {
+          name: customerInfo.name,
+          email: customerInfo.email,
+          address: customerInfo.address
+        }
+      });
       
-      if (orderId) {
-        alert('🎉 Order placed successfully! Order ID: ' + orderId);
+      if (result) {
+        alert(`🎉 Order placed successfully! Order ID: ${result.orderId}`);
+        
+        // Save customer info for order tracking
+        localStorage.setItem('lastCustomerInfo', JSON.stringify(customerInfo));
+        localStorage.setItem('lastOrderId', result.orderId);
+        
         // Reset order flow
         setStep(1);
         setSelectedRestaurant(null);

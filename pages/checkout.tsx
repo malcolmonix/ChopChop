@@ -4,8 +4,7 @@ import { withAuth } from '@/lib/components/protected-route';
 import { useCart } from '@/lib/context/cart.context';
 import { useFirebaseAuth } from '@/lib/context/firebase-auth.context';
 import { useToast } from '@/lib/context/toast.context';
-import { gql } from '@apollo/client';
-import client from '../lib/apolloClient';
+import { OrderService } from '@/lib/firebase/orders';
 
 // Types for our checkout flow
 interface DeliveryAddress {
@@ -31,45 +30,6 @@ interface PaymentMethod {
 }
 
 type CheckoutStep = 'cart' | 'address' | 'payment' | 'confirmation';
-
-const PLACE_ORDER = gql`
-  mutation PlaceOrder(
-    $restaurant: String!
-    $orderInput: [OrderInput!]!
-    $paymentMethod: String!
-    $couponCode: String
-    $tipping: Float!
-    $taxationAmount: Float!
-    $address: AddressInput!
-    $orderDate: String!
-    $isPickedUp: Boolean!
-    $deliveryCharges: Float!
-    $instructions: String
-  ) {
-    placeOrder(
-      restaurant: $restaurant
-      orderInput: $orderInput
-      paymentMethod: $paymentMethod
-      couponCode: $couponCode
-      tipping: $tipping
-      taxationAmount: $taxationAmount
-      address: $address
-      orderDate: $orderDate
-      isPickedUp: $isPickedUp
-      deliveryCharges: $deliveryCharges
-      instructions: $instructions
-    ) {
-      orderId
-      orderStatus
-      paidAmount
-      orderAmount
-      deliveryCharges
-      tipping
-      taxationAmount
-      createdAt
-    }
-  }
-`;
 
 function CheckoutPage() {
   const router = useRouter();
@@ -178,42 +138,108 @@ function CheckoutPage() {
     setIsPlacingOrder(true);
 
     try {
-      const variables = {
-        restaurant: String(state.restaurantId),
-        orderInput: state.items.map((item) => ({
-          title: item.title || item.name,
-          quantity: item.quantity,
-          price: item.price
-        })),
-        paymentMethod: selectedPayment.type.toUpperCase(),
-        couponCode: null,
-        tipping: tip,
-        taxationAmount: tax,
-        address: {
-          deliveryAddress: `${selectedAddress.addressLine1}, ${selectedAddress.city}`,
-          latitude: selectedAddress.latitude,
-          longitude: selectedAddress.longitude
-        },
-        orderDate: new Date().toISOString(),
-        isPickedUp: false,
-        deliveryCharges: deliveryFee,
-        instructions: orderInstructions || null
-      };
-
-      const response = await client.mutate({
-        mutation: PLACE_ORDER,
-        variables
-      });
-
-      setOrderResult((response.data as any)?.placeOrder);
-      setCurrentStep('confirmation');
-      clear();
-      showToast('success', 'Order placed successfully!');
+      // Check if payment method is cash on delivery
+      if (selectedPayment.type === 'cash') {
+        // Direct order placement for cash on delivery
+        await placeCashOrder();
+      } else {
+        // Redirect to payment gateway for other payment methods
+        await initiatePaymentGateway();
+      }
     } catch (error: any) {
       console.error('Order placement error:', error);
-      showToast('error', error.message || 'Failed to place order');
+      showToast('error', error.message || 'Failed to process order');
     } finally {
       setIsPlacingOrder(false);
+    }
+  };
+
+  const placeCashOrder = async () => {
+    if (!selectedAddress || !selectedPayment) {
+      throw new Error('Address and payment method are required');
+    }
+
+    // Prepare order data for Firebase
+    const orderData = {
+      restaurant: Number(state.restaurantId),
+      orderInput: state.items.map((item) => {
+        const orderItem: any = {
+          title: item.title || item.name || 'Unknown Item',
+          quantity: item.quantity,
+          price: item.price
+        };
+        
+        // Only add optional fields if they have values
+        if (item.variations) {
+          orderItem.variation = JSON.stringify(item.variations);
+        }
+        if (item.addons) {
+          orderItem.addons = JSON.stringify(item.addons);
+        }
+        
+        return orderItem;
+      }),
+      paymentMethod: 'CASH',
+      address: {
+        deliveryAddress: `${selectedAddress.addressLine1}, ${selectedAddress.city}`,
+        latitude: selectedAddress.latitude,
+        longitude: selectedAddress.longitude
+      },
+      deliveryCharges: deliveryFee,
+      tipping: tip,
+      taxationAmount: tax,
+      instructions: orderInstructions || '',
+      isPickedUp: false
+    };
+
+    // Place order directly to Firebase
+    const response = await OrderService.placeOrder(orderData);
+
+    setOrderResult(response);
+    setCurrentStep('confirmation');
+    clear();
+    showToast('success', 'Order placed successfully! Pay cash on delivery.');
+  };
+
+  const initiatePaymentGateway = async () => {
+    if (!selectedAddress || !selectedPayment) {
+      throw new Error('Address and payment method are required');
+    }
+
+    // Prepare order data for payment gateway
+    const orderData = {
+      restaurant: String(state.restaurantId),
+      orderInput: state.items.map((item) => ({
+        title: item.title || item.name,
+        quantity: item.quantity,
+        price: item.price
+      })),
+      paymentMethod: selectedPayment.type.toUpperCase(),
+      couponCode: null,
+      tipping: tip,
+      taxationAmount: tax,
+      address: {
+        deliveryAddress: `${selectedAddress.addressLine1}, ${selectedAddress.city}`,
+        latitude: selectedAddress.latitude,
+        longitude: selectedAddress.longitude
+      },
+      orderDate: new Date().toISOString(),
+      isPickedUp: false,
+      deliveryCharges: deliveryFee,
+      instructions: orderInstructions || null,
+      amount: finalTotal
+    };
+
+    // Store order data in session storage for payment completion
+    sessionStorage.setItem('pendingOrder', JSON.stringify(orderData));
+    
+    // Redirect to payment gateway based on payment method
+    if (selectedPayment.type === 'card') {
+      router.push(`/payment/card?amount=${finalTotal}&method=card`);
+    } else if (selectedPayment.type === 'wallet') {
+      router.push(`/payment/mobile-money?amount=${finalTotal}&method=wallet`);
+    } else if (selectedPayment.type === 'bank') {
+      router.push(`/payment/bank-transfer?amount=${finalTotal}&method=bank`);
     }
   };
 
@@ -522,7 +548,12 @@ function CheckoutPage() {
                     disabled={!selectedPayment || isPlacingOrder}
                     className="flex-1 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isPlacingOrder ? 'Placing Order...' : 'Place Order'}
+                    {isPlacingOrder 
+                      ? 'Processing...' 
+                      : selectedPayment?.type === 'cash' 
+                        ? 'Complete Order' 
+                        : 'Proceed to Payment'
+                    }
                   </button>
                 </div>
               </div>
