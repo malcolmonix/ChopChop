@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { collection, getDocs, listCollections } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { getMenuverseFirestore, ensureMenuverseAuth } from '../lib/firebase/menuverse';
 
 export default function CheckFirebaseData() {
@@ -14,6 +14,9 @@ export default function CheckFirebaseData() {
     try {
       // Initialize MenuVerse connection
       const db = getMenuverseFirestore();
+      if (!db) {
+        throw new Error('Failed to initialize Firestore connection');
+      }
       await ensureMenuverseAuth();
       
       const collections = ['eateries', 'restaurants', 'stores', 'vendors'];

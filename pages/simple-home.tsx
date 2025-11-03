@@ -58,7 +58,7 @@ export default function SimplifiedHome() {
           fetchPolicy: 'network-only'
         });
         
-        const activeRestaurants = (result.data?.restaurants || []).filter((r: Restaurant) => r.isActive !== false);
+        const activeRestaurants = ((result.data as any)?.restaurants || []).filter((r: Restaurant) => r.isActive !== false);
         setRestaurants(activeRestaurants);
       } catch (err: any) {
         console.error('Error loading restaurants:', err);

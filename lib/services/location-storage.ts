@@ -2,7 +2,7 @@
 import { UserAddress } from './user-profile';
 import { LocationResult } from './location-service';
 
-interface StoredLocation {
+export interface StoredLocation {
   id: string;
   location: LocationResult;
   timestamp: number;

@@ -30,7 +30,7 @@ interface PaymentMethod {
   isDefault: boolean;
 }
 
-type CheckoutStep = 'cart' | 'address' | 'payment' | 'confirmation';
+type CheckoutStep = 'cart' | 'address' | 'payment' | 'payment-processing' | 'confirmation';
 
 const PLACE_ORDER = gql`
   mutation PlaceOrder(
@@ -221,7 +221,7 @@ function CheckoutPage() {
       variables
     });
 
-    setOrderResult(response.data.placeOrder);
+    setOrderResult((response.data as any).placeOrder);
     setCurrentStep('confirmation');
     clear();
     showToast('success', 'Order placed successfully!');

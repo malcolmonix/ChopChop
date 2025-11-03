@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { menuverseService } from '../lib/services/menuverse';
+import { menuverseService, Eatery } from '../lib/services/menuverse';
 
 export default function OrderFlowDemo() {
   const [step, setStep] = useState(1);
-  const [restaurants, setRestaurants] = useState([]);
-  const [selectedRestaurant, setSelectedRestaurant] = useState(null);
-  const [menuItems, setMenuItems] = useState([]);
-  const [cart, setCart] = useState([]);
+  const [restaurants, setRestaurants] = useState<Eatery[]>([]);
+  const [selectedRestaurant, setSelectedRestaurant] = useState<Eatery | null>(null);
+  const [menuItems, setMenuItems] = useState<any[]>([]);
+  const [cart, setCart] = useState<any[]>([]);
   const [customer, setCustomer] = useState({
     name: 'John Doe',
     email: 'john@example.com',
     address: '123 Main St, City, State'
   });
-  const [orderId, setOrderId] = useState(null);
+  const [orderId, setOrderId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Step 1: Load restaurants
@@ -62,7 +62,7 @@ export default function OrderFlowDemo() {
 
   // Step 4: Place order
   const placeOrder = async () => {
-    if (cart.length === 0) return;
+    if (cart.length === 0 || !selectedRestaurant) return;
     
     setLoading(true);
     try {
@@ -130,7 +130,7 @@ export default function OrderFlowDemo() {
           </div>
 
           {/* Step 1: Restaurant Selection */}
-          {step === 1 && (
+          {step === 4 && selectedRestaurant && (
             <div className="space-y-6">
               <h2 className="text-2xl font-semibold text-center">Choose a Restaurant</h2>
               {restaurants.length === 0 ? (
@@ -177,7 +177,7 @@ export default function OrderFlowDemo() {
           )}
 
           {/* Step 2: Menu Selection */}
-          {step === 2 && (
+          {step === 2 && selectedRestaurant && (
             <div className="space-y-6">
               <div className="text-center">
                 <h2 className="text-2xl font-semibold">{selectedRestaurant.name} Menu</h2>
@@ -252,7 +252,7 @@ export default function OrderFlowDemo() {
           )}
 
           {/* Step 3: Order Review */}
-          {step === 3 && (
+          {step === 3 && selectedRestaurant && (
             <div className="space-y-6">
               <h2 className="text-2xl font-semibold text-center">Review Your Order</h2>
               
@@ -312,7 +312,7 @@ export default function OrderFlowDemo() {
           )}
 
           {/* Step 4: Order Success */}
-          {step === 4 && orderId && (
+          {step === 4 && orderId && selectedRestaurant && (
             <div className="text-center space-y-6">
               <div className="w-24 h-24 bg-green-500 rounded-full flex items-center justify-center mx-auto">
                 <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -53,12 +53,20 @@ export const ModernLocationPicker: React.FC<ModernLocationPickerProps> = ({
     }
   }, []);
 
+  // Initialize map function
+  const initializeMap = useCallback(() => {
+    if (currentUserLocation) {
+      setMapCenter(currentUserLocation);
+    }
+    setMapLoaded(true);
+  }, [currentUserLocation]);
+
   // Initialize map when tab switches to map
   useEffect(() => {
     if (activeTab === 'map' && !mapLoaded) {
       initializeMap();
     }
-  }, [activeTab]);
+  }, [activeTab, initializeMap, mapLoaded]);
 
   // Debounced search
   useEffect(() => {

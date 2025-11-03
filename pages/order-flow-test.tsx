@@ -1,14 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { menuverseService } from '../lib/services/menuverse';
+import { menuverseService, Eatery } from '../lib/services/menuverse';
+
+interface TestResult {
+  message: string;
+  success: boolean;
+  timestamp: Date;
+}
 
 export default function OrderFlowTest() {
   const [status, setStatus] = useState('Testing...');
-  const [restaurants, setRestaurants] = useState([]);
-  const [selectedRestaurant, setSelectedRestaurant] = useState(null);
-  const [menuItems, setMenuItems] = useState([]);
-  const [testResults, setTestResults] = useState([]);
+  const [restaurants, setRestaurants] = useState<Eatery[]>([]);
+  const [selectedRestaurant, setSelectedRestaurant] = useState<Eatery | null>(null);
+  const [menuItems, setMenuItems] = useState<any[]>([]);
+  const [testResults, setTestResults] = useState<TestResult[]>([]);
 
-  const addResult = (message, success = true) => {
+  const addResult = (message: string, success = true) => {
     setTestResults(prev => [...prev, { message, success, timestamp: new Date() }]);
   };
 

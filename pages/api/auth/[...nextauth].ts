@@ -1,10 +1,14 @@
 import NextAuth, { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { verificationCodes } from './send-code';
-import { ApolloClient, InMemoryCache, gql } from '@apollo/client';
+import { ApolloClient, InMemoryCache, gql, createHttpLink } from '@apollo/client';
+
+const httpLink = createHttpLink({
+  uri: process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:4000/graphql',
+});
 
 const client = new ApolloClient({
-  uri: process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:4000/graphql',
+  link: httpLink,
   cache: new InMemoryCache(),
 });
 
@@ -61,7 +65,7 @@ export const authOptions: NextAuthOptions = {
             variables: {
               phoneNumber: credentials.phoneNumber,
             },
-          });
+          }) as { data: any }; // Type assertion for build compatibility
 
           if (data?.phoneLogin?.user) {
             return {
@@ -92,7 +96,7 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (session?.user) {
-        session.user.id = token.id as string;
+        (session.user as any).id = token.id as string;
         session.user.name = token.name as string;
         (session.user as any).phoneNumber = token.phoneNumber;
         (session as any).accessToken = token.accessToken;

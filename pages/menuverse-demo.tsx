@@ -188,7 +188,7 @@ export default function MenuverseHome() {
     address: ''
   });
 
-  const menuverseService = new MenuverseService();
+  const menuverseService = MenuverseService.getInstance();
 
   const handleSearch = async (searchTerm: string) => {
     if (!searchTerm.trim()) {
