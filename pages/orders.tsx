@@ -10,6 +10,7 @@ import { getFirebaseApp } from '@/lib/firebase/client';
 // Extended Order interface with delivery tracking
 interface OrderWithTracking {
   id: string;
+  orderId: string; // Firebase orderId for routing to details page
   eateryId: string;
   eateryName: string;
   customer: {
@@ -144,14 +145,14 @@ const OrderTrackingCard: React.FC<{ order: OrderWithTracking }> = ({ order }) =>
       {/* Action Buttons */}
       <div className="flex space-x-3 pt-4 border-t">
         <button
-          onClick={() => router.push(`/order-details/${order.id}`)}
+          onClick={() => router.push(`/order-details/${order.orderId}`)}
           className="flex-1 bg-orange-600 text-white py-2 px-4 rounded-lg hover:bg-orange-700 text-sm font-medium"
         >
           View Details
         </button>
         {order.status === 'Delivered' && (
           <button
-            onClick={() => router.push(`/rate-order/${order.id}`)}
+            onClick={() => router.push(`/rate-order/${order.orderId}`)}
             className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 text-sm font-medium"
           >
             Rate Order
@@ -271,6 +272,7 @@ export default function OrdersPage() {
             const friendly = apiToFriendly[o.status] || 'Pending';
             return {
               id: o.id,
+              orderId: o.orderId || o.id, // Use orderId for routing, fallback to id
               eateryId: '',
               eateryName: o.restaurant || 'Restaurant',
               customer: customerInfo || { name: '', phone: '', email: '', address: '' },
