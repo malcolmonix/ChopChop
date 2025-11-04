@@ -5,12 +5,14 @@ import Link from 'next/link';
 import { menuVerseAPI } from '../../lib/services/menuverse-api';
 import { useErrorTracker } from '../../lib/utils/logger';
 import { useCart } from '../../lib/context/cart.context';
+import { useToast } from '../../lib/context/toast.context';
 import type { Eatery, MenuItem } from '../../lib/types/menuverse';
 
 export default function RestaurantDetail() {
   const router = useRouter();
   const { id } = router.query;
   const { addItem, count, total } = useCart();
+  const { showToast } = useToast();
   const { trackError } = useErrorTracker();
   
   const [restaurant, setRestaurant] = useState<Eatery | null>(null);
@@ -85,10 +87,14 @@ export default function RestaurantDetail() {
         restaurantName: restaurant?.name || ''
       });
 
+      // Show success toast notification
+      showToast('success', `${menuItem.name} added to cart! 🛒`);
+
       console.log('✅ Added to cart successfully. New count:', count + 1);
     } catch (err: any) {
       console.error('❌ Error adding to cart:', err);
       trackError(err, `Add to cart failed for item: ${menuItem.name}`);
+      showToast('error', 'Failed to add item to cart');
     } finally {
       setAddingToCart(null);
     }
@@ -300,7 +306,7 @@ export default function RestaurantDetail() {
                             <button
                               onClick={() => handleAddToCart(item)}
                               disabled={addingToCart === item.id}
-                              className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 disabled:opacity-50 transition-colors"
+                              className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 disabled:opacity-50 transition-all transform hover:scale-105 active:scale-95 font-medium"
                             >
                               {addingToCart === item.id ? (
                                 <div className="flex items-center">
@@ -308,7 +314,12 @@ export default function RestaurantDetail() {
                                   Adding...
                                 </div>
                               ) : (
-                                'Add to Cart'
+                                <span className="flex items-center">
+                                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                  </svg>
+                                  Add to Cart
+                                </span>
                               )}
                             </button>
                           </div>

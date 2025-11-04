@@ -1,1 +1,1 @@
-self.__REACT_LOADABLE_MANIFEST="{}"
+self.__REACT_LOADABLE_MANIFEST="{\"lib\\\\firebase\\\\orders.ts -> firebase/firestore\":{\"id\":\"lib\\\\firebase\\\\orders.ts -> firebase/firestore\",\"files\":[]},\"pages\\\\restaurant\\\\[id].tsx -> ../../lib/utils/seed-menuverse\":{\"id\":\"pages\\\\restaurant\\\\[id].tsx -> ../../lib/utils/seed-menuverse\",\"files\":[\"static/chunks/lib_utils_seed-menuverse_ts.js\"]}}"
