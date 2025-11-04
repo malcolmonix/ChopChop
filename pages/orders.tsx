@@ -200,45 +200,54 @@ export default function OrdersPage() {
   // Fallback: If GraphQL returns no orders, try fetching from Firebase directly
   useEffect(() => {
     const fetchFromFirebase = async () => {
-      if ((data && data.orders && data.orders.length > 0) || !customerInfo) return;
+      // Only skip if we have actual orders from GraphQL
+      if (data && data.orders && data.orders.length > 0) {
+        console.log('✅ Orders loaded from GraphQL:', data.orders.length);
+        return;
+      }
+      
+      // Always try Firebase fallback if no GraphQL data
+      console.log('🔄 No GraphQL orders, trying Firebase fallback...');
+      
       try {
         const app = getFirebaseApp();
         const db = getFirestore(app);
         const snapshot = await getDocs(collection(db, 'orders'));
         const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        
+        console.log(`📦 Found ${docs.length} orders in Firebase`);
 
-        // Simple client-side filter: match deliveryAddress or orderAmount if available
-        const matched = docs.filter((d: any) => {
-          if (!customerInfo) return false;
-          const addr = (d.deliveryAddress || '').toLowerCase();
-          const customerAddr = (customerInfo.address || '').toLowerCase();
-          const emailMatch = customerInfo.email && d.customer && d.customer.email && d.customer.email === customerInfo.email;
-          return (customerAddr && addr.includes(customerAddr)) || emailMatch;
-        }).map((d: any) => ({
+        // Simple client-side filter: match deliveryAddress or customer info if available
+        let matched = docs;
+        
+        if (customerInfo) {
+          matched = docs.filter((d: any) => {
+            const addr = (d.deliveryAddress || '').toLowerCase();
+            const customerAddr = (customerInfo.address || '').toLowerCase();
+            const emailMatch = customerInfo.email && d.customer && d.customer.email && d.customer.email === customerInfo.email;
+            return (customerAddr && addr.includes(customerAddr)) || emailMatch;
+          });
+          console.log(`🎯 Matched ${matched.length} orders to customer`);
+        }
+        
+        const mappedForUI = matched.map((d: any) => ({
           id: d.id,
           orderId: d.orderId || d.id,
           status: d.orderStatus || d.status || 'PENDING',
           total: d.paidAmount || d.orderAmount || d.totalAmount || 0,
           createdAt: d.createdAt || d.orderDate || new Date().toISOString(),
-          items: (d.items || []).map((it: any, idx: number) => ({ id: it.id || `${d.id}-item-${idx}`, name: it.title || it.name, quantity: it.quantity || 1, price: it.price || 0 })),
+          items: (d.items || []).map((it: any, idx: number) => ({ 
+            id: it.id || `${d.id}-item-${idx}`, 
+            name: it.title || it.name, 
+            quantity: it.quantity || 1, 
+            price: it.price || 0 
+          })),
           restaurant: d.restaurantId || d.restaurant || 'Restaurant'
         }));
 
-        if (matched.length > 0) {
+        if (mappedForUI.length > 0) {
+          console.log(`✅ Successfully loaded ${mappedForUI.length} orders from Firebase`);
           // Transform to the shape expected by the rest of this page
-          const mapped = matched.map((o: any) => ({
-            id: o.id,
-            orderId: o.orderId,
-            status: o.status,
-            total: o.total,
-            createdAt: o.createdAt,
-            items: o.items,
-            restaurant: o.restaurant
-          }));
-
-          // Build the same structure the page expects via the "data" variable
-          (window as any).__FALLBACK_ORDERS = mapped; // debug hook
-          // Set local state by faking the GraphQL data mapping
           const apiToFriendly: Record<string, OrderWithTracking['status']> = {
             'PENDING_PAYMENT': 'Pending',
             'CONFIRMED': 'Confirmed',
@@ -257,7 +266,7 @@ export default function OrdersPage() {
             'Canceled': 'order_received',
           };
 
-          const mappedOrders: OrderWithTracking[] = mapped.map((o: any) => {
+          const mappedOrders: OrderWithTracking[] = mappedForUI.map((o: any) => {
             const friendly = apiToFriendly[o.status] || 'Pending';
             return {
               id: o.id,
