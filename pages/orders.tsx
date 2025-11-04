@@ -177,17 +177,20 @@ export default function OrdersPage() {
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all');
   const [customerInfo, setCustomerInfo] = useState<any>(null);
   const router = useRouter();
-  const { data, loading: queryLoading, refetch } = useQuery<any>(GET_USER_ORDERS, {
-    fetchPolicy: 'cache-and-network',
-    pollInterval: 5000,
-    skip: authLoading || !user,
+  
+  // Make GraphQL query optional - if it fails, we'll use Firebase fallback
+  const { data, loading: queryLoading, error: queryError } = useQuery<any>(GET_USER_ORDERS, {
+    fetchPolicy: 'network-only', // Don't use cache to avoid stale data
+    skip: true, // Skip GraphQL entirely, use Firebase as primary source
+    errorPolicy: 'ignore', // Don't throw errors, just return undefined
   });
 
+  // Log GraphQL errors but don't block the app
   useEffect(() => {
-    if (!authLoading && user) {
-      refetch?.();
+    if (queryError) {
+      console.warn('⚠️ GraphQL query failed (using Firebase fallback):', queryError.message);
     }
-  }, [authLoading, user, refetch]);
+  }, [queryError]);
 
   useEffect(() => {
     // Get customer info from localStorage or session (optional)
@@ -197,17 +200,13 @@ export default function OrdersPage() {
     }
   }, []);
 
-  // Fallback: If GraphQL returns no orders, try fetching from Firebase directly
+  // Primary data source: Firebase (GraphQL is disabled)
   useEffect(() => {
     const fetchFromFirebase = async () => {
-      // Only skip if we have actual orders from GraphQL
-      if (data && data.orders && data.orders.length > 0) {
-        console.log('✅ Orders loaded from GraphQL:', data.orders.length);
-        return;
-      }
+      if (authLoading) return;
       
-      // Always try Firebase fallback if no GraphQL data
-      console.log('🔄 No GraphQL orders, trying Firebase fallback...');
+      console.log('🔄 Fetching orders from Firebase...');
+      setLoading(true);
       
       try {
         const app = getFirebaseApp();
@@ -215,7 +214,7 @@ export default function OrdersPage() {
         const snapshot = await getDocs(collection(db, 'orders'));
         const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
         
-        console.log(`📦 Found ${docs.length} orders in Firebase`);
+        console.log(`📦 Found ${docs.length} total orders in Firebase`);
 
         // Simple client-side filter: match deliveryAddress or customer info if available
         let matched = docs;
@@ -228,6 +227,8 @@ export default function OrdersPage() {
             return (customerAddr && addr.includes(customerAddr)) || emailMatch;
           });
           console.log(`🎯 Matched ${matched.length} orders to customer`);
+        } else {
+          console.log('ℹ️ No customer info available, showing all orders');
         }
         
         const mappedForUI = matched.map((d: any) => ({
@@ -287,53 +288,13 @@ export default function OrdersPage() {
           setLoading(false);
         }
       } catch (err) {
-        console.warn('Firebase fallback orders fetch failed', err);
+        console.error('❌ Firebase orders fetch failed:', err);
+        setLoading(false);
       }
     };
 
     fetchFromFirebase();
-  }, [data, customerInfo]);
-
-  // Map GraphQL orders to UI model
-  useEffect(() => {
-    if (!data) return;
-    const apiToFriendly: Record<string, OrderWithTracking['status']> = {
-      'PENDING_PAYMENT': 'Pending',
-      'CONFIRMED': 'Confirmed',
-      'PROCESSING': 'Preparing',
-      'READY': 'Preparing',
-      'OUT_FOR_DELIVERY': 'Out for Delivery',
-      'DELIVERED': 'Delivered',
-      'CANCELLED': 'Canceled',
-    };
-    const deliveryStatusMap: Record<OrderWithTracking['status'], OrderWithTracking['deliveryStatus']> = {
-      'Pending': 'order_received',
-      'Confirmed': 'awaiting_dispatch',
-      'Preparing': 'packaging',
-      'Out for Delivery': 'dispatch_otw',
-      'Delivered': 'delivered',
-      'Canceled': 'order_received',
-    };
-
-    const mapped: OrderWithTracking[] = (data.orders || []).map((o: any) => {
-      const friendly = apiToFriendly[o.status] || 'Pending';
-      return {
-        id: o.id,
-        eateryId: '',
-        eateryName: o.restaurant || 'Restaurant',
-        customer: customerInfo || { name: '', phone: '', email: '', address: '' },
-        items: (o.items || []).map((it: any) => ({ id: it.id, name: it.name, quantity: it.quantity, price: it.price })),
-        totalAmount: Number(o.total || 0),
-        status: friendly,
-        deliveryStatus: deliveryStatusMap[friendly] || 'order_received',
-        createdAt: o.createdAt,
-        estimatedDeliveryTime: undefined,
-        trackingUpdates: [],
-      };
-    });
-    setOrders(mapped);
-    setLoading(false);
-  }, [data, customerInfo]);
+  }, [authLoading, customerInfo]); // Removed 'data' dependency since we're not using GraphQL
 
   const filteredOrders = orders.filter(order => {
     switch (filter) {
@@ -346,7 +307,7 @@ export default function OrdersPage() {
     }
   });
 
-  if (authLoading || loading || queryLoading) {
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
