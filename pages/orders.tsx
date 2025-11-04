@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc } from 'firebase/firestore';
-import { getMenuverseFirestore, ensureMenuverseAuth } from '../lib/firebase/menuverse';
 import { useRouter } from 'next/router';
+import { useQuery } from '@apollo/client/react';
+import { GET_USER_ORDERS } from '@/lib/graphql/queries';
+import { useFirebaseAuth } from '@/lib/context/firebase-auth.context';
+import { getFirestore, collection, getDocs } from 'firebase/firestore';
+import { getFirebaseApp } from '@/lib/firebase/client';
 
 // Extended Order interface with delivery tracking
 interface OrderWithTracking {
   id: string;
+  orderId: string; // Firebase orderId for routing to details page
   eateryId: string;
   eateryName: string;
   customer: {
@@ -141,14 +145,14 @@ const OrderTrackingCard: React.FC<{ order: OrderWithTracking }> = ({ order }) =>
       {/* Action Buttons */}
       <div className="flex space-x-3 pt-4 border-t">
         <button
-          onClick={() => router.push(`/order-details/${order.id}`)}
+          onClick={() => router.push(`/order-details/${order.orderId}`)}
           className="flex-1 bg-orange-600 text-white py-2 px-4 rounded-lg hover:bg-orange-700 text-sm font-medium"
         >
           View Details
         </button>
         {order.status === 'Delivered' && (
           <button
-            onClick={() => router.push(`/rate-order/${order.id}`)}
+            onClick={() => router.push(`/rate-order/${order.orderId}`)}
             className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 text-sm font-medium"
           >
             Rate Order
@@ -168,82 +172,131 @@ const OrderTrackingCard: React.FC<{ order: OrderWithTracking }> = ({ order }) =>
 };
 
 export default function OrdersPage() {
+  const { user, loading: authLoading } = useFirebaseAuth();
   const [orders, setOrders] = useState<OrderWithTracking[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all');
   const [customerInfo, setCustomerInfo] = useState<any>(null);
   const router = useRouter();
+  
+  // Make GraphQL query optional - if it fails, we'll use Firebase fallback
+  const { data, loading: queryLoading, error: queryError } = useQuery<any>(GET_USER_ORDERS, {
+    fetchPolicy: 'network-only', // Don't use cache to avoid stale data
+    skip: true, // Skip GraphQL entirely, use Firebase as primary source
+    errorPolicy: 'ignore', // Don't throw errors, just return undefined
+  });
+
+  // Log GraphQL errors but don't block the app
+  useEffect(() => {
+    if (queryError) {
+      console.warn('⚠️ GraphQL query failed (using Firebase fallback):', queryError.message);
+    }
+  }, [queryError]);
 
   useEffect(() => {
-    // Get customer info from localStorage or session
+    // Get customer info from localStorage or session (optional)
     const savedCustomer = localStorage.getItem('lastCustomerInfo');
     if (savedCustomer) {
       setCustomerInfo(JSON.parse(savedCustomer));
-    } else {
-      // Redirect to home if no customer info
-      router.push('/');
-      return;
     }
+  }, []);
 
-    // Subscribe to orders for this customer
-    const fetchOrders = async () => {
+  // Primary data source: Firebase (GraphQL is disabled)
+  useEffect(() => {
+    const fetchFromFirebase = async () => {
+      if (authLoading) return;
+      
+      console.log('🔄 Fetching orders from Firebase...');
+      setLoading(true);
+      
       try {
-        await ensureMenuverseAuth();
-        const db = getMenuverseFirestore();
+        const app = getFirebaseApp();
+        const db = getFirestore(app);
+        const snapshot = await getDocs(collection(db, 'orders'));
+        const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
         
-        if (!db) {
-          console.error('Failed to initialize Firestore');
-          return;
+        console.log(`📦 Found ${docs.length} total orders in Firebase`);
+
+        // Simple client-side filter: match deliveryAddress or customer info if available
+        let matched = docs;
+        
+        if (customerInfo) {
+          matched = docs.filter((d: any) => {
+            const addr = (d.deliveryAddress || '').toLowerCase();
+            const customerAddr = (customerInfo.address || '').toLowerCase();
+            const emailMatch = customerInfo.email && d.customer && d.customer.email && d.customer.email === customerInfo.email;
+            return (customerAddr && addr.includes(customerAddr)) || emailMatch;
+          });
+          console.log(`🎯 Matched ${matched.length} orders to customer`);
+        } else {
+          console.log('ℹ️ No customer info available, showing all orders');
         }
-
-        // Query orders across all eateries for this customer
-        // Note: In a real app, you'd have a dedicated orders collection indexed by customer
-        // For now, we'll simulate this with a customer-specific approach
         
-        // Mock data for demonstration - replace with real query
-        const mockOrders: OrderWithTracking[] = [
-          {
-            id: 'order_001',
-            eateryId: 'eatery_1',
-            eateryName: 'Mama Cass Kitchen',
-            customer: JSON.parse(savedCustomer),
-            items: [
-              { id: '1', name: 'Jollof Rice & Chicken', quantity: 2, price: 2500 },
-              { id: '2', name: 'Coca-Cola', quantity: 2, price: 300 }
-            ],
-            totalAmount: 5600,
-            status: 'Out for Delivery',
-            deliveryStatus: 'dispatch_otw',
-            createdAt: new Date(Date.now() - 3600000), // 1 hour ago
-            estimatedDeliveryTime: '25-35 mins',
-            trackingUpdates: []
-          },
-          {
-            id: 'order_002',
-            eateryId: 'eatery_2',
-            eateryName: 'KFC Lagos',
-            customer: JSON.parse(savedCustomer),
-            items: [
-              { id: '3', name: 'Family Feast', quantity: 1, price: 8500 }
-            ],
-            totalAmount: 8500,
-            status: 'Delivered',
-            deliveryStatus: 'delivered',
-            createdAt: new Date(Date.now() - 86400000), // 1 day ago
-            trackingUpdates: []
-          }
-        ];
+        const mappedForUI = matched.map((d: any) => ({
+          id: d.id,
+          orderId: d.orderId || d.id,
+          status: d.orderStatus || d.status || 'PENDING',
+          total: d.paidAmount || d.orderAmount || d.totalAmount || 0,
+          createdAt: d.createdAt || d.orderDate || new Date().toISOString(),
+          items: (d.items || []).map((it: any, idx: number) => ({ 
+            id: it.id || `${d.id}-item-${idx}`, 
+            name: it.title || it.name, 
+            quantity: it.quantity || 1, 
+            price: it.price || 0 
+          })),
+          restaurant: d.restaurantId || d.restaurant || 'Restaurant'
+        }));
 
-        setOrders(mockOrders);
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching orders:', error);
+        if (mappedForUI.length > 0) {
+          console.log(`✅ Successfully loaded ${mappedForUI.length} orders from Firebase`);
+          // Transform to the shape expected by the rest of this page
+          const apiToFriendly: Record<string, OrderWithTracking['status']> = {
+            'PENDING_PAYMENT': 'Pending',
+            'CONFIRMED': 'Confirmed',
+            'PROCESSING': 'Preparing',
+            'READY': 'Preparing',
+            'OUT_FOR_DELIVERY': 'Out for Delivery',
+            'DELIVERED': 'Delivered',
+            'CANCELLED': 'Canceled',
+          };
+          const deliveryStatusMap: Record<OrderWithTracking['status'], OrderWithTracking['deliveryStatus']> = {
+            'Pending': 'order_received',
+            'Confirmed': 'awaiting_dispatch',
+            'Preparing': 'packaging',
+            'Out for Delivery': 'dispatch_otw',
+            'Delivered': 'delivered',
+            'Canceled': 'order_received',
+          };
+
+          const mappedOrders: OrderWithTracking[] = mappedForUI.map((o: any) => {
+            const friendly = apiToFriendly[o.status] || 'Pending';
+            return {
+              id: o.id,
+              orderId: o.orderId || o.id, // Use orderId for routing, fallback to id
+              eateryId: '',
+              eateryName: o.restaurant || 'Restaurant',
+              customer: customerInfo || { name: '', phone: '', email: '', address: '' },
+              items: o.items.map((it: any) => ({ id: it.id, name: it.name, quantity: it.quantity, price: it.price })),
+              totalAmount: Number(o.total || 0),
+              status: friendly,
+              deliveryStatus: deliveryStatusMap[friendly] || 'order_received',
+              createdAt: o.createdAt,
+              estimatedDeliveryTime: undefined,
+              trackingUpdates: [],
+            };
+          });
+
+          setOrders(mappedOrders);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('❌ Firebase orders fetch failed:', err);
         setLoading(false);
       }
     };
 
-    fetchOrders();
-  }, [router]);
+    fetchFromFirebase();
+  }, [authLoading, customerInfo]); // Removed 'data' dependency since we're not using GraphQL
 
   const filteredOrders = orders.filter(order => {
     switch (filter) {
@@ -256,7 +309,7 @@ export default function OrdersPage() {
     }
   });
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>

@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  // Use an alternate dist dir in development to avoid Windows file lock issues on .next
+  ...(process.env.NODE_ENV === 'development' ? { distDir: '.next_dev' } : {}),
+  // Disable output file tracing to avoid creating the locked 'trace' file on some Windows setups
+  outputFileTracing: false,
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'lh3.googleusercontent.com' },

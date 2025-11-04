@@ -1,4 +1,5 @@
 import React from 'react';
+import { useRouter } from 'next/router';
 import { useEateries, useEaterySearch } from '../lib/hooks/use-menuverse';
 import { Eatery, MenuItem, OrderItem } from '../lib/services/menuverse';
 import { MenuverseService } from '../lib/services/menuverse';
@@ -172,6 +173,12 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch, loading = false }) => {
 };
 
 export default function MenuverseHome() {
+  if (process.env.NODE_ENV === 'production') {
+    // Hide demo page in production
+    const router = useRouter();
+    if (typeof window !== 'undefined') router.replace('/');
+    return null;
+  }
   const { eateries, loading: eateriesLoading, error: eateriesError } = useEateries(24);
   const { results: searchResults, loading: searchLoading, error: searchError, search } = useEaterySearch();
   const [isSearching, setIsSearching] = React.useState(false);

@@ -2,26 +2,39 @@
 
 🍕 **ChopChop** is a modern, fast food delivery application built with Next.js and TypeScript.
 
+## 🚀 **PRODUCTION READY - LIVE AT https://chopchop.com**
+
+**Status**: ✅ **Fully Operational** - End-to-end order flow working in production
+
 ## Features
 
+### ✅ **MVP Features (Implemented)**
 - 🏪 Browse restaurants and menus
 - 🛒 Shopping cart and checkout
 - 📱 Mobile-responsive design
-- 💳 Secure payment processing
-- 📍 Location-based restaurant discovery
-- ⭐ Reviews and ratings
-- 🚚 Real-time order tracking
+- � Location-based restaurant discovery
+- � **Live Order Sync**: Real-time synchronization with MenuVerse vendor dashboard
+- 💰 **Cash on Delivery**: Payment method currently supported
+
+### 🚧 **Future Enhancements (Not Yet Implemented)**
+- 💳 Payment gateway integrations (Stripe, PayPal, etc.)
+- ⭐ Customer reviews and ratings system
+- 🚚 Advanced order tracking with GPS
+- � Mobile apps (iOS/Android)
+- 🔔 Push notifications for order updates
+- 📊 Order history and past orders
 
 ## Tech Stack
 
-- **Framework**: Next.js 14
+- **Framework**: Next.js 14.2.33
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS
 - **State Management**: Redux Toolkit
-- **API**: GraphQL (Apollo Client)
-- **Payment**: Stripe
-- **Maps**: Google Maps API
+- **API**: GraphQL (Apollo Client 4.0.9)
+- **Database**: Firebase Firestore (Real-time)
 - **Authentication**: Firebase Auth
+- **Deployment**: Docker + GitHub Actions CI/CD
+- **Infrastructure**: VPS with automated deployments
 
 ## Getting Started
 
@@ -95,6 +108,12 @@ docker run -p 3000:3000 chopchop:latest
 
 ## Deployment
 
+### 🚀 **Production Deployment (Automated)**
+- **Live URL**: https://chopchop.com
+- **CI/CD**: GitHub Actions with automated deployment on every push to `main`
+- **Infrastructure**: Docker containerization on VPS
+- **Monitoring**: Health checks and automated container management
+
 ### Manual Deployment
 
 ```bash
@@ -105,22 +124,48 @@ npm start
 ### Docker Deployment
 
 ```bash
-docker-compose up -d
+# Build Docker image
+docker build -t chopchop:latest .
+
+# Run container
+docker run -p 3000:3000 chopchop:latest
 ```
 
 ### CI/CD with GitHub Actions
 
-Automatic deployment on push to `main` branch.
+**✅ Automated deployment on push to `main` branch**
+- Pre-builds Next.js application outside Docker (secure)
+- Packages into optimized container
+- Deploys to VPS with environment variables
+- Health checks and rollback capability
 
 ## API Integration
 
+**✅ End-to-End Order Flow Working**
+
 ChopChop integrates with:
 
-- **Food Delivery API**: GraphQL endpoint for orders, restaurants, menus
-- **MenuVerse Platform**: Restaurant management integration
-- **Payment Gateway**: Stripe for secure payments
-- **Authentication Service**: Firebase Auth
+- **MenuVerse Platform**: Real-time order synchronization to vendor dashboard
+- **Firebase Firestore**: Real-time database for order management
+- **Authentication Service**: Firebase Auth for user management
 - **Location Services**: Google Maps for delivery tracking
+- **Payment Gateway**: Stripe for secure payments
+
+### Order Flow Architecture
+```
+Customer Order → ChopChop App → Firebase Firestore → MenuVerse Dashboard
+                      ↓
+               Real-time Updates
+```
+
+## 🗺️ **Development Roadmap**
+
+See [`ROADMAP.md`](../ROADMAP.md) for detailed development plans including:
+
+- **Phase 2 Features**: Order tracking, payment integrations, dispatch app
+- **Safe Rollout Process**: Git workflow and testing guidelines
+- **Timeline**: Implementation schedule and priorities
+- **Quality Assurance**: Testing and deployment standards
 
 ## Contributing
 

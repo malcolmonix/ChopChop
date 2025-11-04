@@ -86,11 +86,19 @@ export class MenuverseService {
 
   private async ensureConnection() {
     if (!this.db) {
-      await this.initializeFirestore();
+      try {
+        await this.initializeFirestore();
+      } catch (error) {
+        console.warn('MenuVerse: Failed to initialize Firestore, using fallback mode:', error);
+        // Don't throw - allow app to work without MenuVerse
+      }
     }
     if (!this.db) {
-      throw new Error('MenuVerse connection not available');
+      console.warn('MenuVerse: Connection not available, operations will be skipped');
+      // Return false to indicate connection not available
+      return false;
     }
+    return true;
   }
 
   /**
@@ -98,7 +106,11 @@ export class MenuverseService {
    */
   async getEateryProfile(eateryId: string): Promise<Eatery | null> {
     try {
-      await this.ensureConnection();
+      const connected = await this.ensureConnection();
+      if (!connected) {
+        console.warn('MenuVerse: Skipping getEateryProfile - no connection');
+        return null;
+      }
       
       const eateryRef = doc(this.db, 'eateries', eateryId);
       const docSnap = await getDoc(eateryRef);
@@ -111,7 +123,7 @@ export class MenuverseService {
       }
     } catch (error) {
       console.error('Error fetching eatery profile:', error);
-      throw error;
+      return null; // Return null instead of throwing
     }
   }
 
@@ -120,7 +132,11 @@ export class MenuverseService {
    */
   async getAllEateries(limitCount: number = 50): Promise<Eatery[]> {
     try {
-      await this.ensureConnection();
+      const connected = await this.ensureConnection();
+      if (!connected) {
+        console.warn('MenuVerse: Skipping getAllEateries - no connection');
+        return [];
+      }
       
       const eateriesRef = collection(this.db, 'eateries');
       const q = query(eateriesRef, limit(limitCount));
@@ -135,7 +151,7 @@ export class MenuverseService {
       return eateries;
     } catch (error) {
       console.error('Error fetching eateries:', error);
-      throw error;
+      return []; // Return empty array instead of throwing
     }
   }
 
@@ -144,7 +160,11 @@ export class MenuverseService {
    */
   async getMenuItems(eateryId: string): Promise<MenuItem[]> {
     try {
-      await this.ensureConnection();
+      const connected = await this.ensureConnection();
+      if (!connected) {
+        console.warn('MenuVerse: Skipping getMenuItems - no connection');
+        return [];
+      }
       
       const menuItemsRef = collection(this.db, 'eateries', eateryId, 'menu_items');
       // Simplified query to avoid index requirement - we'll sort client-side
@@ -166,7 +186,7 @@ export class MenuverseService {
       return menuItems;
     } catch (error) {
       console.error('Error fetching menu items:', error);
-      throw error;
+      return []; // Return empty array instead of throwing
     }
   }
 
@@ -175,7 +195,11 @@ export class MenuverseService {
    */
   async getMenuItemsByCategory(eateryId: string, category: string): Promise<MenuItem[]> {
     try {
-      await this.ensureConnection();
+      const connected = await this.ensureConnection();
+      if (!connected) {
+        console.warn('MenuVerse: Skipping getMenuItemsByCategory - no connection');
+        return [];
+      }
       
       const menuItemsRef = collection(this.db, 'eateries', eateryId, 'menu_items');
       const q = query(menuItemsRef, where('category', '==', category));
@@ -193,7 +217,7 @@ export class MenuverseService {
       return menuItems;
     } catch (error) {
       console.error('Error fetching menu items by category:', error);
-      throw error;
+      return []; // Return empty array instead of throwing
     }
   }
 
@@ -202,7 +226,11 @@ export class MenuverseService {
    */
   async placeOrder(eateryId: string, orderData: Order): Promise<string | null> {
     try {
-      await this.ensureConnection();
+      const connected = await this.ensureConnection();
+      if (!connected) {
+        console.warn('MenuVerse: Skipping placeOrder - no connection');
+        return null;
+      }
       
       const ordersRef = collection(this.db, 'eateries', eateryId, 'orders');
       
@@ -227,7 +255,7 @@ export class MenuverseService {
       return docRef.id;
     } catch (error) {
       console.error('Error placing order:', error);
-      throw error;
+      return null; // Return null instead of throwing
     }
   }
 
@@ -236,7 +264,11 @@ export class MenuverseService {
    */
   async searchEateries(searchTerm: string, limitCount: number = 20): Promise<Eatery[]> {
     try {
-      await this.ensureConnection();
+      const connected = await this.ensureConnection();
+      if (!connected) {
+        console.warn('MenuVerse: Skipping searchEateries - no connection');
+        return [];
+      }
       
       // Note: Firestore doesn't support full-text search natively
       // This is a basic implementation - for production, consider using Algolia or similar
@@ -259,7 +291,7 @@ export class MenuverseService {
       return filteredEateries;
     } catch (error) {
       console.error('Error searching eateries:', error);
-      throw error;
+      return []; // Return empty array instead of throwing
     }
   }
 }

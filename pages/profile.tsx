@@ -4,17 +4,31 @@ import { useFormValidation, commonValidations } from '@/lib/utils/validation';
 import { useToast } from '@/lib/context/toast.context';
 import { LoadingButton } from '@/lib/components/loading';
 import { ProfileAddressManager } from '../lib/components/profile-address-manager';
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { useQuery } from '@apollo/client/react';
+import { GET_USER_ORDERS } from '@/lib/graphql/queries';
 
 function ProfilePage() {
-  const { user, signOut } = useFirebaseAuth();
+  const { user, signOut, loading: authLoading } = useFirebaseAuth();
   const router = useRouter();
   const { showToast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'profile' | 'addresses' | 'orders'>('profile');
+  const { data: ordersData, loading: ordersLoading, refetch: refetchOrders } = useQuery<any>(GET_USER_ORDERS, {
+    fetchPolicy: 'cache-and-network',
+    pollInterval: 10000,
+    skip: authLoading || !user,
+  });
+
+  // Ensure refetch after auth becomes available
+  useEffect(() => {
+    if (!authLoading && user) {
+      refetchOrders?.();
+    }
+  }, [authLoading, user, refetchOrders]);
 
   const form = useFormValidation(
     {
@@ -297,27 +311,69 @@ function ProfilePage() {
 
           {/* Orders Section */}
           {activeTab === 'orders' && (
-        <div className="bg-white/80 backdrop-blur-xl shadow-xl rounded-3xl overflow-hidden border border-orange-100">
-          <div className="px-6 py-5 bg-gradient-to-r from-orange-50 to-red-50 border-b border-orange-100">
-            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-              <span>🍱</span> Recent Orders
-            </h2>
-          </div>
-          <div className="px-6 py-12 text-center">
-            <div className="max-w-sm mx-auto">
-              <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-orange-100 to-red-100 rounded-full flex items-center justify-center">
-                <span className="text-4xl">🛒</span>
+            <div className="bg-white/80 backdrop-blur-xl shadow-xl rounded-3xl overflow-hidden border border-orange-100">
+              <div className="px-6 py-5 bg-gradient-to-r from-orange-50 to-red-50 border-b border-orange-100 flex items-center justify-between">
+                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  <span>🍱</span> Recent Orders
+                </h2>
+                <Link href="/orders" className="text-sm font-medium text-orange-700 hover:text-orange-900">View all →</Link>
               </div>
-              <p className="text-gray-600 mb-6">No orders yet. Start exploring delicious meals!</p>
-              <Link
-                href="/"
-                className="inline-block px-6 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-xl hover:from-orange-600 hover:to-red-700 transition-all shadow-md hover:shadow-lg font-medium"
-              >
-                🍔 Start Shopping
-              </Link>
+
+              {authLoading || ordersLoading ? (
+                <div className="px-6 py-12 flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500"></div>
+                </div>
+              ) : (ordersData?.orders?.length ?? 0) > 0 ? (
+                <div className="p-6">
+                  <div className="space-y-4">
+                    {(ordersData.orders as any[]).slice(0, 3).map((o) => {
+                      const apiToFriendly: Record<string, string> = {
+                        'PENDING_PAYMENT': 'Pending',
+                        'CONFIRMED': 'Confirmed',
+                        'PROCESSING': 'Preparing',
+                        'READY': 'Preparing',
+                        'OUT_FOR_DELIVERY': 'Out for Delivery',
+                        'DELIVERED': 'Delivered',
+                        'CANCELLED': 'Canceled',
+                      };
+                      const friendly = apiToFriendly[o.status] || o.status;
+                      return (
+                      <div key={o.id} className="flex items-center justify-between p-4 border rounded-2xl hover:bg-orange-50/50 transition-colors">
+                        <div>
+                          <div className="font-semibold text-gray-900">{o.restaurant || 'Restaurant'}</div>
+                          <div className="text-sm text-gray-600">Order #{String(o.id).slice(-8)} • {new Date(o.createdAt).toLocaleString()}</div>
+                          <div className="mt-1 text-xs inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">{friendly}</div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <div className="text-gray-900 font-bold">₦{Number(o.total || 0).toLocaleString()}</div>
+                          </div>
+                          <Link href={`/order-details/${o.id}`} className="px-3 py-1.5 text-sm font-medium rounded-lg bg-orange-600 text-white hover:bg-orange-700">
+                            Track
+                          </Link>
+                        </div>
+                      </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="px-6 py-12 text-center">
+                  <div className="max-w-sm mx-auto">
+                    <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-orange-100 to-red-100 rounded-full flex items-center justify-center">
+                      <span className="text-4xl">🛒</span>
+                    </div>
+                    <p className="text-gray-600 mb-6">No orders yet. Start exploring delicious meals!</p>
+                    <Link
+                      href="/"
+                      className="inline-block px-6 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-xl hover:from-orange-600 hover:to-red-700 transition-all shadow-md hover:shadow-lg font-medium"
+                    >
+                      🍔 Start Shopping
+                    </Link>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        </div>
           )}
       </div>
     </div>
