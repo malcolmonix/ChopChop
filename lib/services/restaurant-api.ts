@@ -66,11 +66,13 @@ class RestaurantAPIService {
   /**
    * Get all restaurants with optional filtering
    */
-  async getRestaurants(options?: {
-    search?: string;
-    cuisine?: string;
-    limit?: number;
-  }): Promise<Restaurant[]> {
+  async getRestaurants(
+    options?: {
+      search?: string;
+      cuisine?: string;
+      limit?: number;
+    }
+  ): Promise<Restaurant[]> {
     try {
       const { data } = await this.client.query({
         query: GET_RESTAURANTS,
@@ -81,10 +83,10 @@ class RestaurantAPIService {
         },
       });
 
-      return data.restaurants || [];
+      return (data as any).restaurants || [];
     } catch (error) {
       console.error('Error fetching restaurants:', error);
-      throw new Error(`Failed to fetch restaurants: ${error.message}`);
+      throw new Error(`Failed to fetch restaurants: ${(error as any).message}`);
     }
   }
 
@@ -98,10 +100,10 @@ class RestaurantAPIService {
         variables: { id },
       });
 
-      return data.restaurant || null;
+      return (data as any).restaurant || null;
     } catch (error) {
       console.error(`Error fetching restaurant ${id}:`, error);
-      throw new Error(`Failed to fetch restaurant: ${error.message}`);
+      throw new Error(`Failed to fetch restaurant: ${(error as any).message}`);
     }
   }
 
@@ -115,10 +117,10 @@ class RestaurantAPIService {
         variables: { restaurantId },
       });
 
-      return data.menuItems || [];
+      return (data as any).menuItems || [];
     } catch (error) {
       console.error(`Error fetching menu items for restaurant ${restaurantId}:`, error);
-      throw new Error(`Failed to fetch menu items: ${error.message}`);
+      throw new Error(`Failed to fetch menu items: ${(error as any).message}`);
     }
   }
 
@@ -132,10 +134,10 @@ class RestaurantAPIService {
         variables: { restaurantId },
       });
 
-      return data.menuCategories || [];
+      return (data as any).menuCategories || [];
     } catch (error) {
       console.error(`Error fetching menu categories for restaurant ${restaurantId}:`, error);
-      throw new Error(`Failed to fetch menu categories: ${error.message}`);
+      throw new Error(`Failed to fetch menu categories: ${(error as any).message}`);
     }
   }
 
@@ -163,10 +165,10 @@ class RestaurantAPIService {
         variables: restaurantData,
       });
 
-      return data.createRestaurant;
+      return (data as any).createRestaurant;
     } catch (error) {
       console.error('Error creating restaurant:', error);
-      throw new Error(`Failed to create restaurant: ${error.message}`);
+      throw new Error(`Failed to create restaurant: ${(error as any).message}`);
     }
   }
 
@@ -187,10 +189,10 @@ class RestaurantAPIService {
         variables: { id, ...updates },
       });
 
-      return data.updateRestaurant;
+      return (data as any).updateRestaurant;
     } catch (error) {
       console.error(`Error updating restaurant ${id}:`, error);
-      throw new Error(`Failed to update restaurant: ${error.message}`);
+      throw new Error(`Failed to update restaurant: ${(error as any).message}`);
     }
   }
 
@@ -215,10 +217,10 @@ class RestaurantAPIService {
         variables: menuItemData,
       });
 
-      return data.createMenuItem;
+      return (data as any).createMenuItem;
     } catch (error) {
       console.error('Error creating menu item:', error);
-      throw new Error(`Failed to create menu item: ${error.message}`);
+      throw new Error(`Failed to create menu item: ${(error as any).message}`);
     }
   }
 
@@ -239,10 +241,10 @@ class RestaurantAPIService {
         variables: { id, ...updates },
       });
 
-      return data.updateMenuItem;
+      return (data as any).updateMenuItem;
     } catch (error) {
       console.error(`Error updating menu item ${id}:`, error);
-      throw new Error(`Failed to update menu item: ${error.message}`);
+      throw new Error(`Failed to update menu item: ${(error as any).message}`);
     }
   }
 
@@ -256,10 +258,10 @@ class RestaurantAPIService {
         variables: { id },
       });
 
-      return data.deleteMenuItem;
+      return (data as any).deleteMenuItem;
     } catch (error) {
       console.error(`Error deleting menu item ${id}:`, error);
-      throw new Error(`Failed to delete menu item: ${error.message}`);
+      throw new Error(`Failed to delete menu item: ${(error as any).message}`);
     }
   }
 
@@ -278,10 +280,10 @@ class RestaurantAPIService {
         variables: categoryData,
       });
 
-      return data.createMenuCategory;
+      return (data as any).createMenuCategory;
     } catch (error) {
       console.error('Error creating menu category:', error);
-      throw new Error(`Failed to create menu category: ${error.message}`);
+      throw new Error(`Failed to create menu category: ${(error as any).message}`);
     }
   }
 }

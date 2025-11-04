@@ -233,7 +233,7 @@ function CheckoutPage() {
       // ignore localStorage errors
     }
 
-    setOrderResult(response.data.placeOrder);
+    setOrderResult((response.data as any).placeOrder);
     setCurrentStep('confirmation');
     clear();
     showToast('success', 'Order placed successfully!');
