@@ -7,6 +7,7 @@ import { useCart } from '../lib/context/cart.context';
 export default function Header() {
   const { user, signOut } = useFirebaseAuth();
   const { count, total } = useCart();
+  const isProd = process.env.NODE_ENV === 'production';
 
   return (
     <header className="sticky top-0 z-40 w-full bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60 border-b border-gray-200">
@@ -17,18 +18,22 @@ export default function Header() {
         </Link>
 
         <nav className="flex items-center gap-3">
-          <Link
-            href="/order-flow-test"
-            className="hidden sm:block px-2 py-1.5 rounded-lg text-xs font-medium text-red-700 hover:text-red-900 hover:bg-red-50 border border-red-200"
-          >
-            🔧 Debug
-          </Link>
-          <Link
-            href="/menuverse-demo"
-            className="hidden sm:block px-3 py-1.5 rounded-lg text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 border border-gray-200"
-          >
-            MenuVerse Demo
-          </Link>
+          {!isProd && (
+            <>
+              <Link
+                href="/order-flow-test"
+                className="hidden sm:block px-2 py-1.5 rounded-lg text-xs font-medium text-red-700 hover:text-red-900 hover:bg-red-50 border border-red-200"
+              >
+                🔧 Debug
+              </Link>
+              <Link
+                href="/menuverse-demo"
+                className="hidden sm:block px-3 py-1.5 rounded-lg text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 border border-gray-200"
+              >
+                MenuVerse Demo
+              </Link>
+            </>
+          )}
 
           {/* Cart Button */}
           {count > 0 && (

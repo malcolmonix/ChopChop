@@ -109,7 +109,7 @@ export function useReverseGeocode() {
 
 // Utility function to format address components
 export function formatAddress(addressComponents: LocationResult['addressComponents']): string {
-  const parts: string[] = [];
+  const parts = [];
   
   if (addressComponents.street) parts.push(addressComponents.street);
   if (addressComponents.city) parts.push(addressComponents.city);

@@ -221,7 +221,19 @@ function CheckoutPage() {
       variables
     });
 
-    setOrderResult((response.data as any).placeOrder);
+    // Save last customer info to localStorage so Orders page can match orders
+    try {
+      const customerInfo = {
+        name: (user && (user.displayName || user.email)) || 'Guest',
+        email: user?.email || null,
+        address: `${selectedAddress?.addressLine1 || ''}${selectedAddress?.city ? ', ' + selectedAddress.city : ''}`
+      };
+      localStorage.setItem('lastCustomerInfo', JSON.stringify(customerInfo));
+    } catch (err) {
+      // ignore localStorage errors
+    }
+
+    setOrderResult(response.data.placeOrder);
     setCurrentStep('confirmation');
     clear();
     showToast('success', 'Order placed successfully!');

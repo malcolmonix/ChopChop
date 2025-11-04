@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc } from 'firebase/firestore';
-import { getMenuverseFirestore, ensureMenuverseAuth } from '../lib/firebase/menuverse';
 import { useRouter } from 'next/router';
+import { useQuery } from '@apollo/client/react';
+import { GET_USER_ORDERS } from '@/lib/graphql/queries';
+import { useFirebaseAuth } from '@/lib/context/firebase-auth.context';
+import { getFirestore, collection, getDocs } from 'firebase/firestore';
+import { getFirebaseApp } from '@/lib/firebase/client';
 
 // Extended Order interface with delivery tracking
 interface OrderWithTracking {
@@ -168,82 +171,160 @@ const OrderTrackingCard: React.FC<{ order: OrderWithTracking }> = ({ order }) =>
 };
 
 export default function OrdersPage() {
+  const { user, loading: authLoading } = useFirebaseAuth();
   const [orders, setOrders] = useState<OrderWithTracking[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all');
   const [customerInfo, setCustomerInfo] = useState<any>(null);
   const router = useRouter();
+  const { data, loading: queryLoading, refetch } = useQuery<any>(GET_USER_ORDERS, {
+    fetchPolicy: 'cache-and-network',
+    pollInterval: 5000,
+    skip: authLoading || !user,
+  });
 
   useEffect(() => {
-    // Get customer info from localStorage or session
+    if (!authLoading && user) {
+      refetch?.();
+    }
+  }, [authLoading, user, refetch]);
+
+  useEffect(() => {
+    // Get customer info from localStorage or session (optional)
     const savedCustomer = localStorage.getItem('lastCustomerInfo');
     if (savedCustomer) {
       setCustomerInfo(JSON.parse(savedCustomer));
-    } else {
-      // Redirect to home if no customer info
-      router.push('/');
-      return;
     }
+  }, []);
 
-    // Subscribe to orders for this customer
-    const fetchOrders = async () => {
+  // Fallback: If GraphQL returns no orders, try fetching from Firebase directly
+  useEffect(() => {
+    const fetchFromFirebase = async () => {
+      if ((data && data.orders && data.orders.length > 0) || !customerInfo) return;
       try {
-        await ensureMenuverseAuth();
-        const db = getMenuverseFirestore();
-        
-        if (!db) {
-          console.error('Failed to initialize Firestore');
-          return;
+        const app = getFirebaseApp();
+        const db = getFirestore(app);
+        const snapshot = await getDocs(collection(db, 'orders'));
+        const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+        // Simple client-side filter: match deliveryAddress or orderAmount if available
+        const matched = docs.filter((d: any) => {
+          if (!customerInfo) return false;
+          const addr = (d.deliveryAddress || '').toLowerCase();
+          const customerAddr = (customerInfo.address || '').toLowerCase();
+          const emailMatch = customerInfo.email && d.customer && d.customer.email && d.customer.email === customerInfo.email;
+          return (customerAddr && addr.includes(customerAddr)) || emailMatch;
+        }).map((d: any) => ({
+          id: d.id,
+          orderId: d.orderId || d.id,
+          status: d.orderStatus || d.status || 'PENDING',
+          total: d.paidAmount || d.orderAmount || d.totalAmount || 0,
+          createdAt: d.createdAt || d.orderDate || new Date().toISOString(),
+          items: (d.items || []).map((it: any, idx: number) => ({ id: it.id || `${d.id}-item-${idx}`, name: it.title || it.name, quantity: it.quantity || 1, price: it.price || 0 })),
+          restaurant: d.restaurantId || d.restaurant || 'Restaurant'
+        }));
+
+        if (matched.length > 0) {
+          // Transform to the shape expected by the rest of this page
+          const mapped = matched.map((o: any) => ({
+            id: o.id,
+            orderId: o.orderId,
+            status: o.status,
+            total: o.total,
+            createdAt: o.createdAt,
+            items: o.items,
+            restaurant: o.restaurant
+          }));
+
+          // Build the same structure the page expects via the "data" variable
+          (window as any).__FALLBACK_ORDERS = mapped; // debug hook
+          // Set local state by faking the GraphQL data mapping
+          const apiToFriendly: Record<string, OrderWithTracking['status']> = {
+            'PENDING_PAYMENT': 'Pending',
+            'CONFIRMED': 'Confirmed',
+            'PROCESSING': 'Preparing',
+            'READY': 'Preparing',
+            'OUT_FOR_DELIVERY': 'Out for Delivery',
+            'DELIVERED': 'Delivered',
+            'CANCELLED': 'Canceled',
+          };
+          const deliveryStatusMap: Record<OrderWithTracking['status'], OrderWithTracking['deliveryStatus']> = {
+            'Pending': 'order_received',
+            'Confirmed': 'awaiting_dispatch',
+            'Preparing': 'packaging',
+            'Out for Delivery': 'dispatch_otw',
+            'Delivered': 'delivered',
+            'Canceled': 'order_received',
+          };
+
+          const mappedOrders: OrderWithTracking[] = mapped.map((o: any) => {
+            const friendly = apiToFriendly[o.status] || 'Pending';
+            return {
+              id: o.id,
+              eateryId: '',
+              eateryName: o.restaurant || 'Restaurant',
+              customer: customerInfo || { name: '', phone: '', email: '', address: '' },
+              items: o.items.map((it: any) => ({ id: it.id, name: it.name, quantity: it.quantity, price: it.price })),
+              totalAmount: Number(o.total || 0),
+              status: friendly,
+              deliveryStatus: deliveryStatusMap[friendly] || 'order_received',
+              createdAt: o.createdAt,
+              estimatedDeliveryTime: undefined,
+              trackingUpdates: [],
+            };
+          });
+
+          setOrders(mappedOrders);
+          setLoading(false);
         }
-
-        // Query orders across all eateries for this customer
-        // Note: In a real app, you'd have a dedicated orders collection indexed by customer
-        // For now, we'll simulate this with a customer-specific approach
-        
-        // Mock data for demonstration - replace with real query
-        const mockOrders: OrderWithTracking[] = [
-          {
-            id: 'order_001',
-            eateryId: 'eatery_1',
-            eateryName: 'Mama Cass Kitchen',
-            customer: JSON.parse(savedCustomer),
-            items: [
-              { id: '1', name: 'Jollof Rice & Chicken', quantity: 2, price: 2500 },
-              { id: '2', name: 'Coca-Cola', quantity: 2, price: 300 }
-            ],
-            totalAmount: 5600,
-            status: 'Out for Delivery',
-            deliveryStatus: 'dispatch_otw',
-            createdAt: new Date(Date.now() - 3600000), // 1 hour ago
-            estimatedDeliveryTime: '25-35 mins',
-            trackingUpdates: []
-          },
-          {
-            id: 'order_002',
-            eateryId: 'eatery_2',
-            eateryName: 'KFC Lagos',
-            customer: JSON.parse(savedCustomer),
-            items: [
-              { id: '3', name: 'Family Feast', quantity: 1, price: 8500 }
-            ],
-            totalAmount: 8500,
-            status: 'Delivered',
-            deliveryStatus: 'delivered',
-            createdAt: new Date(Date.now() - 86400000), // 1 day ago
-            trackingUpdates: []
-          }
-        ];
-
-        setOrders(mockOrders);
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching orders:', error);
-        setLoading(false);
+      } catch (err) {
+        console.warn('Firebase fallback orders fetch failed', err);
       }
     };
 
-    fetchOrders();
-  }, [router]);
+    fetchFromFirebase();
+  }, [data, customerInfo]);
+
+  // Map GraphQL orders to UI model
+  useEffect(() => {
+    if (!data) return;
+    const apiToFriendly: Record<string, OrderWithTracking['status']> = {
+      'PENDING_PAYMENT': 'Pending',
+      'CONFIRMED': 'Confirmed',
+      'PROCESSING': 'Preparing',
+      'READY': 'Preparing',
+      'OUT_FOR_DELIVERY': 'Out for Delivery',
+      'DELIVERED': 'Delivered',
+      'CANCELLED': 'Canceled',
+    };
+    const deliveryStatusMap: Record<OrderWithTracking['status'], OrderWithTracking['deliveryStatus']> = {
+      'Pending': 'order_received',
+      'Confirmed': 'awaiting_dispatch',
+      'Preparing': 'packaging',
+      'Out for Delivery': 'dispatch_otw',
+      'Delivered': 'delivered',
+      'Canceled': 'order_received',
+    };
+
+    const mapped: OrderWithTracking[] = (data.orders || []).map((o: any) => {
+      const friendly = apiToFriendly[o.status] || 'Pending';
+      return {
+        id: o.id,
+        eateryId: '',
+        eateryName: o.restaurant || 'Restaurant',
+        customer: customerInfo || { name: '', phone: '', email: '', address: '' },
+        items: (o.items || []).map((it: any) => ({ id: it.id, name: it.name, quantity: it.quantity, price: it.price })),
+        totalAmount: Number(o.total || 0),
+        status: friendly,
+        deliveryStatus: deliveryStatusMap[friendly] || 'order_received',
+        createdAt: o.createdAt,
+        estimatedDeliveryTime: undefined,
+        trackingUpdates: [],
+      };
+    });
+    setOrders(mapped);
+    setLoading(false);
+  }, [data, customerInfo]);
 
   const filteredOrders = orders.filter(order => {
     switch (filter) {
@@ -256,7 +337,7 @@ export default function OrdersPage() {
     }
   });
 
-  if (loading) {
+  if (authLoading || loading || queryLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
