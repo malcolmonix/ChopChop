@@ -1,4 +1,4 @@
-import { getFirestore, doc, onSnapshot, collection, query, where, orderBy, Unsubscribe } from 'firebase/firestore';
+import { getFirestore, doc, onSnapshot, collection, query, where, orderBy, getDocs, Unsubscribe } from 'firebase/firestore';
 import { getFirebaseApp } from '../firebase/client';
 
 export interface OrderStatus {
