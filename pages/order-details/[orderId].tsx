@@ -19,7 +19,7 @@ const deliverySteps = [
 
 export default function OrderTrackingPage() {
   const router = useRouter();
-  const { orderid } = router.query;
+  const { orderId } = router.query;
   const { user, loading: authLoading } = useFirebaseAuth();
   const [order, setOrder] = useState<OrderDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -27,14 +27,14 @@ export default function OrderTrackingPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!orderid || typeof orderid !== 'string') return;
+    if (!orderId || typeof orderId !== 'string') return;
 
     setLoading(true);
     setError(null);
 
     // Subscribe to real-time order updates
     const unsubscribeOrder = OrderTrackingService.subscribeToOrder(
-      orderid,
+      orderId,
       (updatedOrder) => {
         if (updatedOrder) {
           setOrder(updatedOrder);
@@ -53,7 +53,7 @@ export default function OrderTrackingPage() {
 
     // Subscribe to rider location updates
     const unsubscribeRider = OrderTrackingService.subscribeToRiderLocation(
-      orderid,
+      orderId,
       (location) => {
         setRiderLocation(location);
       }
@@ -63,7 +63,7 @@ export default function OrderTrackingPage() {
       unsubscribeOrder();
       unsubscribeRider();
     };
-  }, [orderid]);
+  }, [orderId]);
 
   const formatCurrency = (amount: number) => {
     return `₦${amount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -269,7 +269,7 @@ export default function OrderTrackingPage() {
             
             {order.orderStatus === 'DELIVERED' && (
               <button
-                onClick={() => router.push(`/rate-order/${orderid}`)}
+                onClick={() => router.push(`/rate-order/${orderId}`)}
                 className="flex-1 bg-orange-500 text-white py-3 px-6 rounded-lg hover:bg-orange-600 font-medium transition-colors"
               >
                 Rate Your Order
