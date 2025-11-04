@@ -175,6 +175,7 @@ export default function OrdersPage() {
   const { user, loading: authLoading } = useFirebaseAuth();
   const [orders, setOrders] = useState<OrderWithTracking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all');
   const [customerInfo, setCustomerInfo] = useState<any>(null);
   const router = useRouter();
@@ -193,6 +194,47 @@ export default function OrdersPage() {
     }
   }, [queryError]);
 
+  // Sync orders from MenuVerse to Firebase
+  const syncOrders = async () => {
+    try {
+      setSyncing(true);
+      console.log('🔄 Syncing orders from MenuVerse...');
+      
+      const response = await fetch('/api/sync-orders', {
+        method: 'POST',
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Orders synced:', result);
+        // Refresh orders from Firebase
+        await fetchFromFirebase();
+      } else {
+        console.error('❌ Failed to sync orders:', await response.text());
+      }
+    } catch (error) {
+      console.error('❌ Error syncing orders:', error);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  // Auto-sync orders every 30 seconds for active orders
+  useEffect(() => {
+    const hasActiveOrders = orders.some(order => 
+      order.status !== 'Delivered' && order.status !== 'Canceled'
+    );
+
+    if (hasActiveOrders && user) {
+      const interval = setInterval(() => {
+        console.log('🔄 Auto-syncing orders...');
+        syncOrders();
+      }, 30000); // 30 seconds
+
+      return () => clearInterval(interval);
+    }
+  }, [orders, user]);
+
   useEffect(() => {
     // Get customer info from localStorage or session (optional)
     const savedCustomer = localStorage.getItem('lastCustomerInfo');
@@ -202,40 +244,39 @@ export default function OrdersPage() {
   }, []);
 
   // Primary data source: Firebase (GraphQL is disabled)
-  useEffect(() => {
-    const fetchFromFirebase = async () => {
-      if (authLoading) return;
+  const fetchFromFirebase = async () => {
+    if (authLoading) return;
+    
+    console.log('🔄 Fetching orders from Firebase...');
+    setLoading(true);
+    
+    try {
+      const app = getFirebaseApp();
+      const db = getFirestore(app);
+      const snapshot = await getDocs(collection(db, 'orders'));
+      const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       
-      console.log('🔄 Fetching orders from Firebase...');
-      setLoading(true);
-      
-      try {
-        const app = getFirebaseApp();
-        const db = getFirestore(app);
-        const snapshot = await getDocs(collection(db, 'orders'));
-        const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-        
-        console.log(`📦 Found ${docs.length} total orders in Firebase`);
+      console.log(`📦 Found ${docs.length} total orders in Firebase`);
 
-        // Simple client-side filter: match deliveryAddress or customer info if available
-        let matched = docs;
-        
-        if (customerInfo) {
-          matched = docs.filter((d: any) => {
-            const addr = (d.deliveryAddress || '').toLowerCase();
-            const customerAddr = (customerInfo.address || '').toLowerCase();
-            const emailMatch = customerInfo.email && d.customer && d.customer.email && d.customer.email === customerInfo.email;
-            return (customerAddr && addr.includes(customerAddr)) || emailMatch;
-          });
-          console.log(`🎯 Matched ${matched.length} orders to customer`);
-        } else {
-          console.log('ℹ️ No customer info available, showing all orders');
-        }
-        
-        const mappedForUI = matched.map((d: any) => ({
-          id: d.id,
-          orderId: d.orderId || d.id,
-          status: d.orderStatus || d.status || 'PENDING',
+      // Simple client-side filter: match deliveryAddress or customer info if available
+      let matched = docs;
+      
+      if (customerInfo) {
+        matched = docs.filter((d: any) => {
+          const addr = (d.deliveryAddress || '').toLowerCase();
+          const customerAddr = (customerInfo.address || '').toLowerCase();
+          const emailMatch = customerInfo.email && d.customer && d.customer.email && d.customer.email === customerInfo.email;
+          return (customerAddr && addr.includes(customerAddr)) || emailMatch;
+        });
+        console.log(`🎯 Matched ${matched.length} orders to customer`);
+      } else {
+        console.log('ℹ️ No customer info available, showing all orders');
+      }
+      
+      const mappedForUI = matched.map((d: any) => ({
+        id: d.id,
+        orderId: d.orderId || d.id,
+        status: d.orderStatus || d.status || 'PENDING',
           total: d.paidAmount || d.orderAmount || d.totalAmount || 0,
           createdAt: d.createdAt || d.orderDate || new Date().toISOString(),
           items: (d.items || []).map((it: any, idx: number) => ({ 
@@ -293,10 +334,12 @@ export default function OrdersPage() {
         console.error('❌ Firebase orders fetch failed:', err);
         setLoading(false);
       }
-    };
+  };
 
+  // Fetch orders on mount and when dependencies change
+  useEffect(() => {
     fetchFromFirebase();
-  }, [authLoading, customerInfo]); // Removed 'data' dependency since we're not using GraphQL
+  }, [authLoading, customerInfo]);
 
   const filteredOrders = orders.filter(order => {
     switch (filter) {
@@ -340,8 +383,30 @@ export default function OrdersPage() {
                 </button>
                 <h1 className="text-2xl font-bold text-gray-900">My Orders</h1>
               </div>
-              <div className="text-sm text-gray-600">
-                {customerInfo?.name}
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={syncOrders}
+                  disabled={syncing}
+                  className="flex items-center space-x-2 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 disabled:opacity-50 transition-colors"
+                  title="Sync latest order status from restaurant"
+                >
+                  {syncing ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>Syncing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      <span>Sync Orders</span>
+                    </>
+                  )}
+                </button>
+                <div className="text-sm text-gray-600">
+                  {customerInfo?.name}
+                </div>
               </div>
             </div>
           </div>
