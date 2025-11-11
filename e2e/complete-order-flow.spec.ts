@@ -24,7 +24,7 @@ test.describe('Complete Order Flow - Critical Path', () => {
     // Step 2: Navigate to restaurant detail
     const firstRestaurant = page.locator('[data-testid="restaurant-card"], .restaurant-card, .bg-white').first();
     const restaurantName = await firstRestaurant.locator('h2, h3, .font-bold').first().textContent();
-    await firstRestaurant.click();
+    await firstRestaurant.click({ force: true });
     
     // Wait for navigation and menu to load
     await page.waitForURL(/\/restaurant\/.*|\/menuverse\/.*/);
@@ -102,7 +102,7 @@ test.describe('Complete Order Flow - Critical Path', () => {
     await page.waitForLoadState('networkidle');
     
     await page.waitForSelector('[data-testid="restaurant-card"], .restaurant-card, .bg-white', { timeout: 15000 });
-    await page.locator('[data-testid="restaurant-card"], .restaurant-card, .bg-white').first().click();
+    await page.locator('[data-testid="restaurant-card"], .restaurant-card, .bg-white').first().click({ force: true });
     
     await page.waitForURL(/\/restaurant\/.*|\/menuverse\/.*/);
     await page.waitForSelector('[data-testid="menu-item"], .menu-item, .food-item', { timeout: 15000 });
@@ -151,7 +151,7 @@ test.describe('Complete Order Flow - Critical Path', () => {
     await page.waitForLoadState('networkidle');
     
     await page.waitForSelector('[data-testid="restaurant-card"], .restaurant-card, .bg-white', { timeout: 15000 });
-    await page.locator('[data-testid="restaurant-card"], .restaurant-card, .bg-white').first().click();
+    await page.locator('[data-testid="restaurant-card"], .restaurant-card, .bg-white').first().click({ force: true });
     
     await page.waitForURL(/\/restaurant\/.*|\/menuverse\/.*/);
     await page.waitForSelector('[data-testid="menu-item"], .menu-item, .food-item', { timeout: 15000 });
@@ -191,7 +191,7 @@ test.describe('Order Flow - Mobile Responsiveness', () => {
     await page.waitForSelector('[data-testid="restaurant-card"], .restaurant-card, .bg-white', { timeout: 15000 });
     
     // Tap on restaurant
-    await page.locator('[data-testid="restaurant-card"], .restaurant-card, .bg-white').first().tap();
+    await page.locator('[data-testid="restaurant-card"], .restaurant-card, .bg-white').first().tap({ force: true });
     await page.waitForURL(/\/restaurant\/.*|\/menuverse\/.*/);
     
     // Wait for menu

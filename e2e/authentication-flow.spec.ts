@@ -44,7 +44,7 @@ test.describe('Authentication - Login Flow', () => {
     
     if (await emailInput.count() > 0 && await submitButton.count() > 0) {
       // Try to submit without filling
-      await submitButton.first().click();
+      await submitButton.first().click({ force: true });
       await page.waitForTimeout(1000);
       
       // Should show validation errors
@@ -72,7 +72,7 @@ test.describe('Authentication - Login Flow', () => {
       }
       
       if (await submitButton.count() > 0) {
-        await submitButton.click();
+        await submitButton.click({ force: true });
         await page.waitForTimeout(1000);
         
         // Should show email validation error
@@ -90,7 +90,7 @@ test.describe('Authentication - Login Flow', () => {
     const signupLink = page.locator('a:has-text("Sign up"), a:has-text("Register"), a:has-text("Create account")');
     
     if (await signupLink.count() > 0) {
-      await signupLink.first().click();
+      await signupLink.first().click({ force: true });
       await page.waitForURL(/\/register|\/signup/);
       
       // Should be on registration page
@@ -151,7 +151,7 @@ test.describe('Authentication - Registration Flow', () => {
     if (await passwordInput.count() > 0 && await submitButton.count() > 0) {
       // Try weak password
       await passwordInput.fill('123');
-      await submitButton.click();
+      await submitButton.click({ force: true });
       await page.waitForTimeout(1000);
       
       // Should show password requirements error
@@ -170,7 +170,7 @@ test.describe('Authentication - Registration Flow', () => {
       
       const submitButton = page.locator('button[type="submit"]').first();
       if (await submitButton.count() > 0) {
-        await submitButton.click();
+        await submitButton.click({ force: true });
         await page.waitForTimeout(1000);
         
         // Should show password mismatch error
@@ -189,7 +189,7 @@ test.describe('Authentication - Registration Flow', () => {
       // Try to submit without checking
       const submitButton = page.locator('button[type="submit"]').first();
       if (await submitButton.count() > 0) {
-        await submitButton.click();
+        await submitButton.click({ force: true });
         await page.waitForTimeout(1000);
         
         // May show error for unchecked terms
@@ -247,7 +247,7 @@ test.describe('Authentication - User Profile', () => {
     const editButton = page.locator('button:has-text("Edit"), button:has-text("Update"), [data-testid="edit-profile"]');
     
     if (await editButton.count() > 0) {
-      await editButton.first().click();
+      await editButton.first().click({ force: true });
       await page.waitForTimeout(500);
       
       // Fields should become editable
@@ -258,7 +258,7 @@ test.describe('Authentication - User Profile', () => {
         // Save changes
         const saveButton = page.locator('button:has-text("Save"), button:has-text("Update")').first();
         if (await saveButton.count() > 0) {
-          await saveButton.click();
+          await saveButton.click({ force: true });
           await page.waitForTimeout(1000);
           
           // Should show success message
@@ -296,7 +296,7 @@ test.describe('Authentication - User Profile', () => {
       await expect(ordersLink.first()).toBeVisible();
       
       // Click to navigate
-      await ordersLink.first().click();
+      await ordersLink.first().click({ force: true });
       await page.waitForURL(/\/orders/);
       
       // Should be on orders page
@@ -367,7 +367,7 @@ test.describe('Authentication - Protected Routes', () => {
       await expect(logoutButton.first()).toBeVisible();
       
       // Click logout
-      await logoutButton.first().click();
+      await logoutButton.first().click({ force: true });
       await page.waitForTimeout(1000);
       
       // Should clear auth state

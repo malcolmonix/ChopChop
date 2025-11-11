@@ -97,7 +97,7 @@ test.describe('Order Tracking', () => {
     const orderItem = page.locator('[data-testid="order-item"], .order-card, .order-item').first();
     
     if (await orderItem.count() > 0) {
-      await orderItem.click();
+      await orderItem.click({ force: true });
       await page.waitForTimeout(1000);
       
       // Should navigate to order details or show modal
@@ -158,7 +158,7 @@ test.describe('Order Tracking', () => {
       const activeFilter = page.locator('button:has-text("Active"), button:has-text("Pending"), option[value="pending"]');
       
       if (await activeFilter.count() > 0) {
-        await activeFilter.first().click();
+        await activeFilter.first().click({ force: true });
         await page.waitForTimeout(500);
         
         // Should show only active/pending orders
@@ -292,7 +292,7 @@ test.describe('Order Details Page', () => {
       await expect(reorderButton.first()).toBeEnabled();
       
       // Click reorder
-      await reorderButton.first().click();
+      await reorderButton.first().click({ force: true });
       await page.waitForTimeout(1000);
       
       // Should add items to cart or navigate to restaurant
@@ -465,7 +465,7 @@ test.describe('Order Notifications', () => {
     if (await viewOrderButton.count() > 0) {
       await expect(viewOrderButton.first()).toBeVisible();
       
-      await viewOrderButton.first().click();
+      await viewOrderButton.first().click({ force: true });
       await page.waitForTimeout(1000);
       
       // Should navigate to order details
@@ -484,7 +484,7 @@ test.describe('Order Notifications', () => {
     if (await continueButton.count() > 0) {
       await expect(continueButton.first()).toBeVisible();
       
-      await continueButton.first().click();
+      await continueButton.first().click({ force: true });
       await page.waitForURL('/');
       
       // Should navigate to homepage

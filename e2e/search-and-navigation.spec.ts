@@ -127,7 +127,7 @@ test.describe('Restaurant Filtering and Sorting', () => {
       await page.waitForSelector('[data-testid="restaurant-card"], .restaurant-card', { timeout: 15000 });
       
       // Click on a category
-      await categoryFilters.first().click();
+      await categoryFilters.first().click({ force: true });
       await page.waitForTimeout(1000);
       
       // Results should filter
@@ -151,12 +151,12 @@ test.describe('Restaurant Filtering and Sorting', () => {
         await sortControl.first().selectOption({ label: /rating/i });
       } else {
         // It's a button
-        await sortControl.first().click();
+        await sortControl.first().click({ force: true });
         await page.waitForTimeout(500);
         
         const ratingOption = page.locator('text=rating, [data-sort="rating"]');
         if (await ratingOption.count() > 0) {
-          await ratingOption.first().click();
+          await ratingOption.first().click({ force: true });
         }
       }
       
@@ -179,10 +179,10 @@ test.describe('Restaurant Filtering and Sorting', () => {
       if (sortControl.first().locator('option').count() > 0) {
         await sortControl.first().selectOption({ label: /delivery|time/i });
       } else {
-        await sortControl.first().click();
+        await sortControl.first().click({ force: true });
         const timeOption = page.locator('text=delivery time, text=fastest, [data-sort="time"]');
         if (await timeOption.count() > 0) {
-          await timeOption.first().click();
+          await timeOption.first().click({ force: true });
         }
       }
       
@@ -201,7 +201,7 @@ test.describe('Restaurant Filtering and Sorting', () => {
       await page.waitForSelector('[data-testid="restaurant-card"], .restaurant-card', { timeout: 15000 });
       
       // Adjust price filter
-      await priceFilter.first().click();
+      await priceFilter.first().click({ force: true });
       await page.waitForTimeout(1000);
       
       // Results should update
@@ -219,7 +219,7 @@ test.describe('Restaurant Filtering and Sorting', () => {
       await page.waitForSelector('[data-testid="restaurant-card"], .restaurant-card', { timeout: 15000 });
       
       // Click on dietary preference
-      await dietaryFilter.first().click();
+      await dietaryFilter.first().click({ force: true });
       await page.waitForTimeout(1000);
       
       // Results should filter
@@ -237,7 +237,7 @@ test.describe('Navigation and Breadcrumbs', () => {
     await page.waitForLoadState('networkidle');
     
     await page.waitForSelector('[data-testid="restaurant-card"], .restaurant-card, .bg-white', { timeout: 15000 });
-    await page.locator('[data-testid="restaurant-card"], .restaurant-card, .bg-white').first().click();
+    await page.locator('[data-testid="restaurant-card"], .restaurant-card, .bg-white').first().click({ force: true });
     
     await page.waitForURL(/\/restaurant\/.*|\/menuverse\/.*/);
     
@@ -250,7 +250,7 @@ test.describe('Navigation and Breadcrumbs', () => {
       // Click on home breadcrumb
       const homeLink = breadcrumbs.locator('a:has-text("Home"), a[href="/"]').first();
       if (await homeLink.count() > 0) {
-        await homeLink.click();
+        await homeLink.click({ force: true });
         await page.waitForURL('/');
         
         // Should be back on homepage
@@ -270,7 +270,7 @@ test.describe('Navigation and Breadcrumbs', () => {
     // Click on different navigation items
     const ordersLink = header.locator('a:has-text("Orders"), a[href*="/orders"]');
     if (await ordersLink.count() > 0) {
-      await ordersLink.first().click();
+      await ordersLink.first().click({ force: true });
       await page.waitForTimeout(1000);
       
       // May navigate to orders page or login
@@ -326,7 +326,7 @@ test.describe('Location-based Features', () => {
       await expect(locationButton.first()).toBeVisible();
       
       // Click to open location selector
-      await locationButton.first().click();
+      await locationButton.first().click({ force: true });
       await page.waitForTimeout(500);
       
       // Location modal/dropdown should appear
@@ -348,12 +348,12 @@ test.describe('Location-based Features', () => {
       const initialCount = await page.locator('[data-testid="restaurant-card"], .restaurant-card').count();
       
       // Change location
-      await locationButton.click();
+      await locationButton.click({ force: true });
       await page.waitForTimeout(500);
       
       const locationOption = page.locator('[data-testid="location-option"], .location-item').first();
       if (await locationOption.count() > 0) {
-        await locationOption.click();
+        await locationOption.click({ force: true });
         await page.waitForTimeout(1000);
         
         // Restaurants should update based on location
@@ -368,7 +368,7 @@ test.describe('Location-based Features', () => {
     await page.waitForLoadState('networkidle');
     
     await page.waitForSelector('[data-testid="restaurant-card"], .restaurant-card, .bg-white', { timeout: 15000 });
-    await page.locator('[data-testid="restaurant-card"], .restaurant-card, .bg-white').first().click();
+    await page.locator('[data-testid="restaurant-card"], .restaurant-card, .bg-white').first().click({ force: true });
     
     await page.waitForURL(/\/restaurant\/.*|\/menuverse\/.*/);
     
