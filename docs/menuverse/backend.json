@@ -1,0 +1,281 @@
+{
+  "entities": {
+    "Eatery": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Eatery",
+      "type": "object",
+      "description": "Represents an eatery or restaurant using the MenuVerse Vendor app.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the eatery entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the eatery."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the eatery."
+        },
+        "logoUrl": {
+          "type": "string",
+          "description": "URL of the eatery's logo.",
+          "format": "uri"
+        },
+        "bannerUrl": {
+          "type": "string",
+          "description": "URL of the eatery's banner image.",
+          "format": "uri"
+        },
+        "contactEmail": {
+          "type": "string",
+          "description": "Contact email address for the eatery.",
+          "format": "email"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description"
+      ]
+    },
+    "MenuItem": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "MenuItem",
+      "type": "object",
+      "description": "Represents a menu item offered by an eatery.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the menu item entity."
+        },
+        "eateryId": {
+          "type": "string",
+          "description": "Reference to Eatery. (Relationship: Eatery 1:N MenuItem)"
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the menu item."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the menu item."
+        },
+        "price": {
+          "type": "number",
+          "description": "Price of the menu item."
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "URL of the menu item's image.",
+          "format": "uri"
+        },
+        "createdAt": {
+            "type": "string",
+            "description": "The date and time the menu item was created.",
+            "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "eateryId",
+        "name",
+        "description",
+        "price"
+      ]
+    },
+    "Post": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Post",
+      "type": "object",
+      "description": "Represents a post or activity log entry created by an eatery.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the post entity."
+        },
+        "eateryId": {
+          "type": "string",
+          "description": "Reference to Eatery. (Relationship: Eatery 1:N Post)"
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the post."
+        },
+        "content": {
+          "type": "string",
+          "description": "Content of the post."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "The date and time the post was created.",
+          "format": "date-time"
+        },
+        "type": {
+            "type": "string",
+            "description": "The type of activity.",
+            "enum": ["new-item", "item-update", "item-delete", "general"]
+        }
+      },
+      "required": [
+        "id",
+        "eateryId",
+        "title",
+        "content",
+        "createdAt",
+        "type"
+      ]
+    },
+    "Order": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Order",
+      "type": "object",
+      "description": "Represents an order placed by a customer from an eatery.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the order entity."
+        },
+        "eateryId": {
+          "type": "string",
+          "description": "Reference to Eatery. (Relationship: Eatery 1:N Order)"
+        },
+        "customer": {
+            "type": "object",
+            "description": "Information about the customer who placed the order.",
+            "properties": {
+                "name": { "type": "string" },
+                "email": { "type": "string", "format": "email" },
+                "address": { "type": "string" }
+            },
+            "required": ["name", "email"]
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Date and time when the order was placed.",
+          "format": "date-time"
+        },
+        "totalAmount": {
+          "type": "number",
+          "description": "Total amount of the order."
+        },
+        "status": {
+          "type": "string",
+          "description": "Status of the order.",
+          "enum": ["Pending", "Confirmed", "Preparing", "Out for Delivery", "Delivered", "Canceled"]
+        },
+        "items": {
+          "type": "array",
+          "description": "List of items in the order.",
+          "items": {
+            "type": "object",
+            "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" },
+                "quantity": { "type": "number" },
+                "price": { "type": "number" }
+            },
+            "required": ["id", "name", "quantity", "price"]
+          }
+        }
+      },
+      "required": [
+        "id",
+        "eateryId",
+        "customer",
+        "createdAt",
+        "totalAmount",
+        "status",
+        "items"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/eateries/{eateryId}",
+        "definition": {
+          "entityName": "Eatery",
+          "schema": {
+            "$ref": "#/backend/entities/Eatery"
+          },
+          "description": "Stores eatery profiles. The eateryId is used to link menu items, posts, and orders.",
+          "params": [
+            {
+              "name": "eateryId",
+              "description": "The unique identifier for the eatery."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/eateries/{eateryId}/menu_items/{menuItemId}",
+        "definition": {
+          "entityName": "MenuItem",
+          "schema": {
+            "$ref": "#/backend/entities/MenuItem"
+          },
+          "description": "Stores menu items for a specific eatery. The eateryId is implicitly used for authorization. ",
+          "params": [
+            {
+              "name": "eateryId",
+              "description": "The unique identifier for the eatery."
+            },
+            {
+              "name": "menuItemId",
+              "description": "The unique identifier for the menu item."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/eateries/{eateryId}/posts/{postId}",
+        "definition": {
+          "entityName": "Post",
+          "schema": {
+            "$ref": "#/backend/entities/Post"
+          },
+          "description": "Stores posts for a specific eatery. The eateryId is implicitly used for authorization.",
+          "params": [
+            {
+              "name": "eateryId",
+              "description": "The unique identifier for the eatery."
+            },
+            {
+              "name": "postId",
+              "description": "The unique identifier for the post."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/eateries/{eateryId}/orders/{orderId}",
+        "definition": {
+          "entityName": "Order",
+          "schema": {
+            "$ref": "#/backend/entities/Order"
+          },
+          "description": "Stores orders for a specific eatery. The eateryId is implicitly used for authorization.",
+          "params": [
+            {
+              "name": "eateryId",
+              "description": "The unique identifier for the eatery."
+            },
+            {
+              "name": "orderId",
+              "description": "The unique identifier for the order."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "This design prioritizes security, scalability, and ease of debugging by adhering to Authorization Independence, Structural Segregation, and Access Modeling principles.\\n\\n**Eateries (Vendors):** Eateries are stored in a top-level `eateries` collection. This allows for easy listing and management of all eateries.  Each eatery document stores its basic profile information.\\n\\n**Menu Items:**  Menu items are stored in a subcollection `/eateries/{eateryId}/menu_items`. This enforces ownership and simplifies security rules.  The `eateryId` is implicitly known from the path, satisfying Authorization Independence for menu items.  Listing menu items for a specific eatery is efficient and secure.\\n\\n**Posts:** Posts are stored in a subcollection `/eateries/{eateryId}/posts`. This structure mirrors the menu items, enabling similar benefits for ownership and security. The `eateryId` is implicitly known from the path, satisfying Authorization Independence for posts.\\n\\n**Orders:** Orders are stored in the subcollection `/eateries/{eateryId}/orders`. This allows vendors to easily manage orders related to their eatery.  The `eateryId` is implicitly known from the path, satisfying Authorization Independence for orders. `customer` is stored to reference the user who placed the order.\\n\\n**Authorization Independence and QAPs:**\\n*   The use of subcollections `/eateries/{eateryId}/menu_items`, `/eateries/{eateryId}/posts`, and `/eateries/{eateryId}/orders` ensures authorization independence.  Rules do not need to `get()` data from parent documents. Security rules can operate solely on the data present within the specific menu item, post, or order document and the `request.auth.uid`.\\n*   QAPs are supported because listing operations are naturally scoped to the eatery. The security rules can efficiently filter list operations based on the `eateryId` and user's authentication state. For listing all menu items of a vendor, a request must be made to `/eateries/{eateryId}/menu_items`, which allows us to check authorization. List requests are based on path and authentication, not on filtering data.\\n\\n**Denormalization (Authorization Independence):** Although not explicitly required by the initial data model, the design is ready to scale to scale to incorporate denormalization if collaborative features (e.g., multiple users managing a single eatery) are introduced. For example, if multiple users can manage an eatery's menu, a `members` map (as described in the Access Modeling section) can be added to the `eateries` document, and the `eateryId` and the `members` map from the `eateries` document should be denormalized down to the subcollections like `/eateries/{eateryId}/menu_items`."
+  }
+}
+    
