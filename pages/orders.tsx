@@ -1,40 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { useQuery } from '@apollo/client/react';
-import { GET_USER_ORDERS } from '@/lib/graphql/queries';
 import { useFirebaseAuth } from '@/lib/context/firebase-auth.context';
-import { getFirestore, collection, getDocs } from 'firebase/firestore';
-import { getFirebaseApp } from '@/lib/firebase/client';
+import { orderService, Order, SortOption } from '@/lib/services/order.service';
 
 // Extended Order interface with delivery tracking
-interface OrderWithTracking {
-  id: string;
-  orderId: string; // Firebase orderId for routing to details page
-  eateryId: string;
-  eateryName: string;
-  customer: {
-    name: string;
-    phone: string;
-    email: string;
-    address: string;
-  };
-  items: {
-    id: string;
-    name: string;
-    quantity: number;
-    price: number;
-  }[];
-  totalAmount: number;
-  status: 'Pending' | 'Confirmed' | 'Preparing' | 'Out for Delivery' | 'Delivered' | 'Canceled';
-  deliveryStatus: 'order_received' | 'packaging' | 'awaiting_dispatch' | 'dispatch_arrived' | 'dispatched' | 'dispatch_otw' | 'dispatch_arrived_location' | 'delivered';
-  createdAt: any;
-  estimatedDeliveryTime?: string;
-  trackingUpdates: {
-    status: string;
-    timestamp: any;
-    message: string;
-  }[];
+interface OrderWithTracking extends Order {
+  // All properties inherited from Order service
 }
 
 const deliverySteps = [
@@ -177,22 +149,64 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all');
+  const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [customerInfo, setCustomerInfo] = useState<any>(null);
   const router = useRouter();
   
-  // Make GraphQL query optional - if it fails, we'll use Firebase fallback
-  const { data, loading: queryLoading, error: queryError } = useQuery<any>(GET_USER_ORDERS, {
-    fetchPolicy: 'network-only', // Don't use cache to avoid stale data
-    skip: true, // Skip GraphQL entirely, use Firebase as primary source
-    errorPolicy: 'ignore', // Don't throw errors, just return undefined
-  });
-
-  // Log GraphQL errors but don't block the app
   useEffect(() => {
-    if (queryError) {
-      console.warn('⚠️ GraphQL query failed (using Firebase fallback):', queryError.message);
+    // Get customer info from localStorage or session
+    const savedCustomer = localStorage.getItem('lastCustomerInfo');
+    if (savedCustomer) {
+      setCustomerInfo(JSON.parse(savedCustomer));
     }
-  }, [queryError]);
+  }, []);
+
+  // Fetch orders using the new OrderService
+  const fetchOrders = async () => {
+    if (authLoading) return;
+    
+    console.log('🔄 Fetching orders using OrderService...');
+    setLoading(true);
+    
+    try {
+      let fetchedOrders: Order[];
+      
+      // If we have customer info, use it for filtering
+      if (customerInfo?.email) {
+        console.log(`📧 Fetching orders for customer: ${customerInfo.email}`);
+        
+        // Use the appropriate filter method
+        if (filter === 'active') {
+          fetchedOrders = await orderService.getActiveOrders(customerInfo.email);
+        } else if (filter === 'completed') {
+          fetchedOrders = await orderService.getCompletedOrders(customerInfo.email);
+        } else {
+          fetchedOrders = await orderService.getOrders(
+            { customerEmail: customerInfo.email },
+            sortBy,
+            false // Don't use cache for fresh data
+          );
+        }
+      } else {
+        console.log('ℹ️ No customer info available, fetching all recent orders');
+        // Fetch recent orders without filter
+        fetchedOrders = await orderService.getOrders(
+          { limit: 50 },
+          sortBy,
+          false
+        );
+      }
+      
+      console.log(`✅ Successfully loaded ${fetchedOrders.length} orders`);
+      setOrders(fetchedOrders as OrderWithTracking[]);
+      
+    } catch (error) {
+      console.error('❌ Failed to fetch orders:', error);
+      setOrders([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Sync orders from MenuVerse to Firebase
   const syncOrders = async () => {
@@ -207,8 +221,10 @@ export default function OrdersPage() {
       if (response.ok) {
         const result = await response.json();
         console.log('✅ Orders synced:', result);
-        // Refresh orders from Firebase
-        await fetchFromFirebase();
+        
+        // Clear cache and refresh orders
+        orderService.clearCache();
+        await fetchOrders();
       } else {
         console.error('❌ Failed to sync orders:', await response.text());
       }
@@ -235,111 +251,10 @@ export default function OrdersPage() {
     }
   }, [orders, user]);
 
-  useEffect(() => {
-    // Get customer info from localStorage or session (optional)
-    const savedCustomer = localStorage.getItem('lastCustomerInfo');
-    if (savedCustomer) {
-      setCustomerInfo(JSON.parse(savedCustomer));
-    }
-  }, []);
-
-  // Primary data source: Firebase (GraphQL is disabled)
-  const fetchFromFirebase = async () => {
-    if (authLoading) return;
-    
-    console.log('🔄 Fetching orders from Firebase...');
-    setLoading(true);
-    
-    try {
-      const app = getFirebaseApp();
-      const db = getFirestore(app);
-      const snapshot = await getDocs(collection(db, 'orders'));
-      const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      
-      console.log(`📦 Found ${docs.length} total orders in Firebase`);
-
-      // Simple client-side filter: match deliveryAddress or customer info if available
-      let matched = docs;
-      
-      if (customerInfo) {
-        matched = docs.filter((d: any) => {
-          const addr = (d.deliveryAddress || '').toLowerCase();
-          const customerAddr = (customerInfo.address || '').toLowerCase();
-          const emailMatch = customerInfo.email && d.customer && d.customer.email && d.customer.email === customerInfo.email;
-          return (customerAddr && addr.includes(customerAddr)) || emailMatch;
-        });
-        console.log(`🎯 Matched ${matched.length} orders to customer`);
-      } else {
-        console.log('ℹ️ No customer info available, showing all orders');
-      }
-      
-      const mappedForUI = matched.map((d: any) => ({
-        id: d.id,
-        orderId: d.orderId || d.id,
-        status: d.orderStatus || d.status || 'PENDING',
-          total: d.paidAmount || d.orderAmount || d.totalAmount || 0,
-          createdAt: d.createdAt || d.orderDate || new Date().toISOString(),
-          items: (d.items || []).map((it: any, idx: number) => ({ 
-            id: it.id || `${d.id}-item-${idx}`, 
-            name: it.title || it.name, 
-            quantity: it.quantity || 1, 
-            price: it.price || 0 
-          })),
-          restaurant: d.restaurantId || d.restaurant || 'Restaurant'
-        }));
-
-        if (mappedForUI.length > 0) {
-          console.log(`✅ Successfully loaded ${mappedForUI.length} orders from Firebase`);
-          // Transform to the shape expected by the rest of this page
-          const apiToFriendly: Record<string, OrderWithTracking['status']> = {
-            'PENDING_PAYMENT': 'Pending',
-            'CONFIRMED': 'Confirmed',
-            'PROCESSING': 'Preparing',
-            'READY': 'Preparing',
-            'OUT_FOR_DELIVERY': 'Out for Delivery',
-            'DELIVERED': 'Delivered',
-            'CANCELLED': 'Canceled',
-          };
-          const deliveryStatusMap: Record<OrderWithTracking['status'], OrderWithTracking['deliveryStatus']> = {
-            'Pending': 'order_received',
-            'Confirmed': 'awaiting_dispatch',
-            'Preparing': 'packaging',
-            'Out for Delivery': 'dispatch_otw',
-            'Delivered': 'delivered',
-            'Canceled': 'order_received',
-          };
-
-          const mappedOrders: OrderWithTracking[] = mappedForUI.map((o: any) => {
-            const friendly = apiToFriendly[o.status] || 'Pending';
-            return {
-              id: o.id,
-              orderId: o.orderId || o.id, // Use orderId for routing, fallback to id
-              eateryId: '',
-              eateryName: o.restaurant || 'Restaurant',
-              customer: customerInfo || { name: '', phone: '', email: '', address: '' },
-              items: o.items.map((it: any) => ({ id: it.id, name: it.name, quantity: it.quantity, price: it.price })),
-              totalAmount: Number(o.total || 0),
-              status: friendly,
-              deliveryStatus: deliveryStatusMap[friendly] || 'order_received',
-              createdAt: o.createdAt,
-              estimatedDeliveryTime: undefined,
-              trackingUpdates: [],
-            };
-          });
-
-          setOrders(mappedOrders);
-          setLoading(false);
-        }
-      } catch (err) {
-        console.error('❌ Firebase orders fetch failed:', err);
-        setLoading(false);
-      }
-  };
-
   // Fetch orders on mount and when dependencies change
   useEffect(() => {
-    fetchFromFirebase();
-  }, [authLoading, customerInfo]);
+    fetchOrders();
+  }, [authLoading, customerInfo, filter, sortBy]);
 
   const filteredOrders = orders.filter(order => {
     switch (filter) {
@@ -433,6 +348,27 @@ export default function OrdersPage() {
                 {tab.label} ({tab.count})
               </button>
             ))}
+          </div>
+
+          {/* Sort Selector */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="text-sm text-gray-600">
+              Showing {filteredOrders.length} {filteredOrders.length === 1 ? 'order' : 'orders'}
+            </div>
+            <div className="flex items-center space-x-2">
+              <label className="text-sm text-gray-600">Sort by:</label>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortOption)}
+                className="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+              >
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="amount-high">Amount: High to Low</option>
+                <option value="amount-low">Amount: Low to High</option>
+                <option value="status">Status</option>
+              </select>
+            </div>
           </div>
 
           {/* Orders List */}
