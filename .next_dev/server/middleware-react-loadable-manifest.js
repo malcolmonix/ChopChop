@@ -1,1 +1,1 @@
-self.__REACT_LOADABLE_MANIFEST="{\"pages/index.tsx -> ../lib/utils/debug-restaurants\":{\"id\":\"pages/index.tsx -> ../lib/utils/debug-restaurants\",\"files\":[\"static/chunks/lib_utils_debug-restaurants_ts.js\"]},\"pages/index.tsx -> ../lib/utils/seed-menuverse\":{\"id\":\"pages/index.tsx -> ../lib/utils/seed-menuverse\",\"files\":[\"static/chunks/lib_utils_seed-menuverse_ts.js\"]}}"
+self.__REACT_LOADABLE_MANIFEST="{}"

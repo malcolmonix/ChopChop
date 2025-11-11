@@ -2,5 +2,9 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/": "pages/index.js"
+  "/payment/bank-transfer": "pages/payment/bank-transfer.js",
+  "/order-confirmation": "pages/order-confirmation.js",
+  "/orders": "pages/orders.js",
+  "/api/sync-orders": "pages/api/sync-orders.js",
+  "/order-details/[orderId]": "pages/order-details/[orderId].js"
 }
