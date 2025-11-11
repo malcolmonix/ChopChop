@@ -6,6 +6,13 @@ import { useFirebaseAuth } from '@/lib/context/firebase-auth.context';
 import { useToast } from '@/lib/context/toast.context';
 import { gql } from '@apollo/client';
 import client from '../lib/apolloClient';
+import {
+  initializeMoonifyPayment,
+  isCardPaymentResponse,
+  isBankTransferResponse,
+  type MoonifyBankTransferResponse,
+  type MoonifyCardPaymentResponse
+} from '@/lib/services/moonify.service';
 
 // Types for our checkout flow
 interface DeliveryAddress {
@@ -84,6 +91,9 @@ function CheckoutPage() {
   const [tip, setTip] = useState(0);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [orderResult, setOrderResult] = useState<any>(null);
+  const [moonifyBankTransfer, setMoonifyBankTransfer] = useState<MoonifyBankTransferResponse | null>(null);
+  const [paymentReference, setPaymentReference] = useState<string>('');
+ 
 
   // Sample addresses - in production, these would come from user's saved addresses
   const savedAddresses: DeliveryAddress[] = [
@@ -114,7 +124,7 @@ function CheckoutPage() {
     }
   ];
 
-  // Sample payment methods
+  // Sample payment methods - Mobile Money hidden as requested
   const paymentMethods: PaymentMethod[] = [
     {
       id: 'cash',
@@ -126,22 +136,23 @@ function CheckoutPage() {
     {
       id: 'card1',
       type: 'card',
-      name: 'Debit Card',
-      details: '**** **** **** 1234',
+      name: 'Debit/Credit Card',
+      details: 'Pay securely with your card via Moonify',
       isDefault: false
     },
-    {
-      id: 'wallet1',
-      type: 'wallet',
-      name: 'Mobile Money',
-      details: 'MTN MoMo - 0801234567',
-      isDefault: false
-    },
+    // Mobile Money - Hidden as requested
+    // {
+    //   id: 'wallet1',
+    //   type: 'wallet',
+    //   name: 'Mobile Money',
+    //   details: 'MTN MoMo - 0801234567',
+    //   isDefault: false
+    // },
     {
       id: 'bank1',
       type: 'bank',
       name: 'Bank Transfer',
-      details: 'Transfer to merchant account',
+      details: 'Transfer to merchant account via Moonify',
       isDefault: false
     }
   ];
@@ -258,25 +269,54 @@ function CheckoutPage() {
   };
 
   const processCardPayment = async (amount: number) => {
-    showToast('info', 'Redirecting to card payment...');
+    showToast('info', 'Initializing secure card payment...');
+    setCurrentStep('payment-processing');
     
-    // TODO: Integrate with payment gateway (Paystack, Flutterwave, etc.)
-    // For now, simulate payment flow
-    setTimeout(async () => {
-      try {
-        // Simulate payment success
-        const paymentSuccessful = confirm('Payment simulation: Click OK for success, Cancel for failure');
-        
-        if (paymentSuccessful) {
-          await processOrderDirectly();
-        } else {
-          throw new Error('Payment was declined');
-        }
-      } catch (error) {
-        showToast('error', 'Payment failed. Please try again.');
-        setCurrentStep('payment');
+    try {
+      // Initialize Moonify card payment
+      const response = await initializeMoonifyPayment({
+        amount: amount,
+        currency: 'NGN',
+        email: user?.email || 'guest@chopchop.com',
+        orderId: `ORDER-${Date.now()}`,
+        customerName: user?.displayName || selectedAddress?.name || 'Guest',
+        description: `Order from ${state.restaurantName || 'ChopChop'}`,
+        channel: 'card',
+        callbackUrl: `${window.location.origin}/payment/verify`
+      });
+
+      if (!response.success || !isCardPaymentResponse(response)) {
+        throw new Error(response.error || 'Failed to initialize card payment');
       }
-    }, 2000);
+
+      const cardResponse = response as MoonifyCardPaymentResponse;
+      setPaymentReference(cardResponse.reference);
+
+      // Redirect to Moonify checkout page
+      showToast('success', 'Redirecting to secure payment page...');
+      
+      // In test mode, simulate the payment flow
+      if (process.env.NODE_ENV !== 'production') {
+        setTimeout(async () => {
+          const paymentSuccessful = confirm(
+            `Moonify Card Payment\n\nAmount: ₦${amount.toLocaleString()}\nReference: ${cardResponse.reference}\n\nClick OK to simulate successful payment, Cancel for failure`
+          );
+          
+          if (paymentSuccessful) {
+            await processOrderDirectly();
+          } else {
+            throw new Error('Payment was cancelled or declined');
+          }
+        }, 1500);
+      } else {
+        // Redirect to Moonify checkout
+        window.location.href = cardResponse.authorizationUrl;
+      }
+    } catch (error: any) {
+      console.error('Card payment error:', error);
+      showToast('error', error.message || 'Card payment failed. Please try again.');
+      setCurrentStep('payment');
+    }
   };
 
   const processMobileMoneyPayment = async (amount: number) => {
@@ -300,25 +340,36 @@ function CheckoutPage() {
   };
 
   const processBankTransferPayment = async (amount: number) => {
-    showToast('info', 'Generating bank transfer details...');
+    showToast('info', 'Generating bank transfer details via Moonify...');
+    setCurrentStep('payment-processing');
     
-    // TODO: Generate bank transfer instructions
-    setTimeout(async () => {
-      try {
-        const transferConfirmed = confirm(
-          `Bank Transfer Details:\nAccount: 1234567890\nBank: ChopChop Bank\nAmount: ₦${amount.toLocaleString()}\n\nClick OK when transfer is complete`
-        );
-        
-        if (transferConfirmed) {
-          await processOrderDirectly();
-        } else {
-          throw new Error('Bank transfer not completed');
-        }
-      } catch (error) {
-        showToast('error', 'Bank transfer verification failed. Please try again.');
-        setCurrentStep('payment');
+    try {
+      // Initialize Moonify bank transfer
+      const response = await initializeMoonifyPayment({
+        amount: amount,
+        currency: 'NGN',
+        email: user?.email || 'guest@chopchop.com',
+        orderId: `ORDER-${Date.now()}`,
+        customerName: user?.displayName || selectedAddress?.name || 'Guest',
+        description: `Order from ${state.restaurantName || 'ChopChop'}`,
+        channel: 'bank_transfer'
+      });
+
+      if (!response.success || !isBankTransferResponse(response)) {
+        throw new Error(response.error || 'Failed to generate bank transfer details');
       }
-    }, 2000);
+
+      const bankResponse = response as MoonifyBankTransferResponse;
+      setMoonifyBankTransfer(bankResponse);
+      setPaymentReference(bankResponse.reference);
+      
+      showToast('success', 'Bank transfer details generated successfully!');
+      // Stay on payment-processing step to show transfer details
+    } catch (error: any) {
+      console.error('Bank transfer error:', error);
+      showToast('error', error.message || 'Failed to generate bank transfer details');
+      setCurrentStep('payment');
+    }
   };
 
   const renderStepIndicator = () => {
@@ -360,6 +411,127 @@ function CheckoutPage() {
   };
 
   if (currentStep === 'payment-processing') {
+    // Show bank transfer details if available
+    if (moonifyBankTransfer && moonifyBankTransfer.transferAccount) {
+      const { transferAccount } = moonifyBankTransfer;
+      
+      return (
+        <div className="min-h-screen bg-gray-50 py-8">
+          <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+            {renderStepIndicator()}
+            <div className="bg-white rounded-lg shadow-sm p-8">
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 mx-auto mb-4 bg-blue-100 rounded-full flex items-center justify-center">
+                  <span className="text-3xl">🏦</span>
+                </div>
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">Complete Bank Transfer</h1>
+                <p className="text-gray-600">
+                  Transfer the exact amount below to the account details provided
+                </p>
+              </div>
+
+              {/* Amount to Pay */}
+              <div className="bg-gradient-to-r from-orange-500 to-red-600 rounded-lg p-6 mb-6 text-white text-center">
+                <div className="text-sm opacity-90 mb-1">Amount to Pay</div>
+                <div className="text-4xl font-bold">₦{transferAccount.amount.toLocaleString()}</div>
+              </div>
+
+              {/* Bank Transfer Details */}
+              <div className="bg-gray-50 rounded-lg p-6 mb-6 space-y-4">
+                <div>
+                  <div className="text-xs text-gray-500 uppercase mb-1">Bank Name</div>
+                  <div className="text-lg font-bold text-gray-900">{transferAccount.bankName}</div>
+                </div>
+                <div className="border-t border-gray-200 pt-4">
+                  <div className="text-xs text-gray-500 uppercase mb-1">Account Number</div>
+                  <div className="flex items-center justify-between">
+                    <div className="text-xl font-mono font-bold text-gray-900">
+                      {transferAccount.accountNumber}
+                    </div>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(transferAccount.accountNumber);
+                        showToast('success', 'Account number copied!');
+                      }}
+                      className="text-orange-600 hover:text-orange-700 text-sm font-medium"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+                <div className="border-t border-gray-200 pt-4">
+                  <div className="text-xs text-gray-500 uppercase mb-1">Account Name</div>
+                  <div className="text-lg font-medium text-gray-900">{transferAccount.accountName}</div>
+                </div>
+                <div className="border-t border-gray-200 pt-4">
+                  <div className="text-xs text-gray-500 uppercase mb-1">Payment Reference</div>
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-mono text-gray-900">{transferAccount.reference}</div>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(transferAccount.reference);
+                        showToast('success', 'Reference copied!');
+                      }}
+                      className="text-orange-600 hover:text-orange-700 text-sm font-medium"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Important Instructions */}
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+                <div className="flex items-start">
+                  <span className="text-xl mr-2">⚠️</span>
+                  <div className="text-sm text-yellow-800">
+                    <strong>Important:</strong> Make sure to transfer the exact amount and include the payment reference when making your transfer. Your order will be confirmed once payment is received.
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="space-y-3">
+                <button
+                  onClick={async () => {
+                    try {
+                      setIsPlacingOrder(true);
+                      await processOrderDirectly();
+                      showToast('info', 'Order placed! Payment confirmation pending...');
+                    } catch (error: any) {
+                      showToast('error', error.message || 'Failed to place order');
+                    } finally {
+                      setIsPlacingOrder(false);
+                    }
+                  }}
+                  disabled={isPlacingOrder}
+                  className="w-full py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50"
+                >
+                  {isPlacingOrder ? 'Placing Order...' : 'I have Completed the Transfer'}
+                </button>
+                <button
+                  onClick={() => {
+                    setMoonifyBankTransfer(null);
+                    setCurrentStep('payment');
+                  }}
+                  className="w-full py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Change Payment Method
+                </button>
+              </div>
+
+              {/* Help Text */}
+              <div className="mt-6 text-center text-sm text-gray-500">
+                <p>Payment usually reflects within 5-10 minutes</p>
+                <p className="mt-1">For support, contact: support@chopchop.com</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Default processing view (for card payments or initial state)
     return (
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
