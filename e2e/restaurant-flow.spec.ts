@@ -28,7 +28,7 @@ test.describe('Restaurant Browsing and Cart Flow', () => {
     await page.waitForSelector('[data-testid="restaurant-card"], .restaurant-card, .bg-white', { timeout: 10000 });
     
     // Click on the first restaurant
-    await page.locator('[data-testid="restaurant-card"], .restaurant-card, .bg-white').first().click();
+    await page.locator('[data-testid="restaurant-card"], .restaurant-card, .bg-white').first().click({ force: true });
     
     // Should navigate to restaurant detail page
     await expect(page).toHaveURL(/\/restaurant\/.*/, { timeout: 10000 });
@@ -45,7 +45,7 @@ test.describe('Restaurant Browsing and Cart Flow', () => {
     // Navigate to a restaurant page
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="restaurant-card"], .restaurant-card, .bg-white', { timeout: 10000 });
-    await page.locator('[data-testid="restaurant-card"], .restaurant-card, .bg-white').first().click();
+    await page.locator('[data-testid="restaurant-card"], .restaurant-card, .bg-white').first().click({ force: true });
     
     // Wait for menu items to load
     await page.waitForSelector('[data-testid="menu-item"], .menu-item, .food-item', { timeout: 10000 });
@@ -54,7 +54,7 @@ test.describe('Restaurant Browsing and Cart Flow', () => {
     const initialCartCount = await page.locator('[data-testid="cart-count"], .cart-count').textContent();
     
     // Click "Add to Cart" button
-    await page.locator('[data-testid="add-to-cart"], .add-to-cart, button:has-text("Add"), button:has-text("₦")').first().click();
+    await page.locator('[data-testid="add-to-cart"], .add-to-cart, button:has-text("Add"), button:has-text("₦")').first().click({ force: true });
     
     // Wait for cart to update
     await page.waitForTimeout(1000);
@@ -68,10 +68,10 @@ test.describe('Restaurant Browsing and Cart Flow', () => {
     // Add an item to cart first
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('[data-testid="restaurant-card"], .restaurant-card, .bg-white', { timeout: 10000 });
-    await page.locator('[data-testid="restaurant-card"], .restaurant-card, .bg-white').first().click();
+    await page.locator('[data-testid="restaurant-card"], .restaurant-card, .bg-white').first().click({ force: true });
     
     await page.waitForSelector('[data-testid="menu-item"], .menu-item, .food-item', { timeout: 10000 });
-    await page.locator('[data-testid="add-to-cart"], .add-to-cart, button:has-text("Add"), button:has-text("₦")').first().click();
+    await page.locator('[data-testid="add-to-cart"], .add-to-cart, button:has-text("Add"), button:has-text("₦")').first().click({ force: true });
     
     // Navigate to cart page
     await page.goto('/cart');

@@ -8,7 +8,11 @@ import {
   setDoc, 
   collection,
   addDoc,
-  serverTimestamp 
+  serverTimestamp,
+  query,
+  where,
+  getDocs,
+  getDoc
 } from 'firebase/firestore';
 import { getFirebaseApp } from './client';
 
@@ -106,29 +110,92 @@ export class OrderSyncService {
   /**
    * Update customer order status when vendor makes changes
    * Called from MenuVerse when vendor updates order status
+   * 
+   * This method implements the webhook handler pattern documented in
+   * docs/API-INTEGRATION.md - MenuVerse Order Update Webhook
    */
   static async syncStatusToCustomer(
     vendorOrderId: string,
     newStatus: CustomerOrder['status'],
     vendorId: string,
-    message?: string
+    message?: string,
+    riderInfo?: {
+      name: string;
+      phone: string;
+      vehicle?: string;
+      plateNumber?: string;
+    }
   ): Promise<boolean> {
     try {
-      // Find the customer order by searching for matching vendor order
-      // In a real app, you'd store the customer order ID in the vendor order
-      // For now, we'll search by orderId (ChopChop order ID)
-      
-      // TODO: Implement proper customer order lookup
-      // This is a simplified version - in production you'd:
-      // 1. Store customerOrderId in vendor order during creation
-      // 2. Use that for direct updates instead of searching
-      
       console.log(`🔄 Syncing status to customer: ${newStatus} for vendor order ${vendorOrderId}`);
       
-      // For now, we'll implement the direct update mechanism
-      // when we have the proper order relationship established
+      // ✅ FIXED: Implement proper customer order lookup
+      // Query customer-orders collection by orderId field
+      const customerOrdersRef = collection(db, 'customer-orders');
+      const q = query(
+        customerOrdersRef,
+        where('orderId', '==', vendorOrderId),
+        where('vendorId', '==', vendorId)
+      );
       
+      const snapshot = await getDocs(q);
+      
+      if (snapshot.empty) {
+        console.warn(`⚠️ No customer order found for vendor order ${vendorOrderId}`);
+        return false;
+      }
+      
+      // Update all matching customer orders (should be only one)
+      const updates = snapshot.docs.map(async (docSnapshot) => {
+        const orderRef = doc(db, 'customer-orders', docSnapshot.id);
+        
+        // Map MenuVerse status to customer-friendly delivery status
+        const deliveryStatusMap: Record<string, string> = {
+          'Pending': 'order_received',
+          'Confirmed': 'packaging',
+          'Preparing': 'packaging',
+          'Out for Delivery': 'dispatched',
+          'Delivered': 'delivered',
+          'Canceled': 'order_received'
+        };
+        
+        const deliveryStatus = deliveryStatusMap[newStatus] || 'order_received';
+        
+        // Prepare tracking update
+        const trackingUpdate = {
+          status: deliveryStatus,
+          timestamp: serverTimestamp(),
+          message: message || `Order ${newStatus.toLowerCase()}`,
+          location: riderInfo ? `Rider: ${riderInfo.name}` : undefined
+        };
+        
+        // Get existing tracking updates
+        const currentData = docSnapshot.data();
+        const existingUpdates = currentData.trackingUpdates || [];
+        
+        // Update order with new status and tracking
+        await updateDoc(orderRef, {
+          status: newStatus,
+          deliveryStatus: deliveryStatus,
+          updatedAt: serverTimestamp(),
+          trackingUpdates: [...existingUpdates, trackingUpdate],
+          ...(riderInfo && {
+            rider: {
+              name: riderInfo.name,
+              phone: riderInfo.phone,
+              vehicle: riderInfo.vehicle || 'Motorcycle',
+              plateNumber: riderInfo.plateNumber || 'N/A'
+            }
+          })
+        });
+        
+        console.log(`✅ Customer order ${docSnapshot.id} synced to status: ${newStatus}`);
+        return true;
+      });
+      
+      await Promise.all(updates);
       return true;
+      
     } catch (error) {
       console.error('❌ Failed to sync status to customer:', error);
       return false;
@@ -137,6 +204,9 @@ export class OrderSyncService {
 
   /**
    * Add tracking update to customer order
+   * 
+   * This method properly retrieves existing updates and appends new ones
+   * following the documented pattern in docs/API-INTEGRATION.md
    */
   static async addTrackingUpdate(
     customerOrderId: string,
@@ -149,26 +219,63 @@ export class OrderSyncService {
     try {
       const orderRef = doc(db, 'customer-orders', customerOrderId);
       
-      // Add tracking update and update timestamp
+      // ✅ FIXED: Get existing updates and append
+      // First, get the current order data
+      const orderDoc = await getDoc(orderRef);
+      
+      if (!orderDoc.exists()) {
+        console.error(`❌ Order not found: ${customerOrderId}`);
+        return false;
+      }
+      
+      const currentData = orderDoc.data();
+      const existingUpdates = currentData.trackingUpdates || [];
+      
+      // Create new tracking update
+      const newUpdate = {
+        status: update.status,
+        timestamp: serverTimestamp(),
+        message: update.message,
+        location: update.location
+      };
+      
+      // Append to existing updates
       await updateDoc(orderRef, {
         updatedAt: serverTimestamp(),
-        trackingUpdates: [
-          ...[], // TODO: Get existing updates and append
-          {
-            status: update.status,
-            timestamp: serverTimestamp(),
-            message: update.message,
-            location: update.location
-          }
-        ]
+        trackingUpdates: [...existingUpdates, newUpdate]
       });
 
       console.log(`✅ Tracking update added to customer order: ${customerOrderId}`);
+      console.log(`   Total updates: ${existingUpdates.length + 1}`);
       return true;
 
     } catch (error) {
       console.error('❌ Failed to add tracking update:', error);
       return false;
+    }
+  }
+
+  /**
+   * Get customer order by ChopChop order ID
+   * Utility method for looking up customer orders
+   */
+  static async getCustomerOrderByOrderId(orderId: string): Promise<string | null> {
+    try {
+      const customerOrdersRef = collection(db, 'customer-orders');
+      const q = query(customerOrdersRef, where('orderId', '==', orderId));
+      
+      const snapshot = await getDocs(q);
+      
+      if (snapshot.empty) {
+        return null;
+      }
+      
+      // Return the first matching document ID
+      return snapshot.docs[0].id;
+      
+    } catch (error) {
+      console.error('❌ Failed to get customer order:', error);
+      return null;
     }
   }
 }
