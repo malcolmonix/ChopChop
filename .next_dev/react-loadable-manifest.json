@@ -1,12 +1,6 @@
 {
-  "pages/index.tsx -> ../lib/utils/debug-restaurants": {
-    "id": "pages/index.tsx -> ../lib/utils/debug-restaurants",
-    "files": [
-      "static/chunks/lib_utils_debug-restaurants_ts.js"
-    ]
-  },
-  "pages/index.tsx -> ../lib/utils/seed-menuverse": {
-    "id": "pages/index.tsx -> ../lib/utils/seed-menuverse",
+  "pages\\restaurant\\[id].tsx -> ../../lib/utils/seed-menuverse": {
+    "id": "pages\\restaurant\\[id].tsx -> ../../lib/utils/seed-menuverse",
     "files": [
       "static/chunks/lib_utils_seed-menuverse_ts.js"
     ]
