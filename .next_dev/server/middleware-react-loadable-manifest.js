@@ -1,1 +1,1 @@
-self.__REACT_LOADABLE_MANIFEST="{\"pages\\\\restaurant\\\\[id].tsx -> ../../lib/utils/seed-menuverse\":{\"id\":\"pages\\\\restaurant\\\\[id].tsx -> ../../lib/utils/seed-menuverse\",\"files\":[\"static/chunks/lib_utils_seed-menuverse_ts.js\"]}}"
+self.__REACT_LOADABLE_MANIFEST="{}"
