@@ -9,12 +9,13 @@ interface InteractiveMapProps {
   zoom?: number;
 }
 
-export const InteractiveMap: React.FC<InteractiveMapProps> = ({
-  center,
-  onLocationSelect,
-  height = '400px',
-  zoom = 15
-}) => {
+export const InteractiveMap: React.FC<InteractiveMapProps> = (props) => {
+  const {
+    center,
+    onLocationSelect,
+    height = '400px',
+    zoom = 15
+  } = props;
   const mapRef = useRef<HTMLDivElement>(null);
   const [mapInstance, setMapInstance] = useState<any>(null);
   const [markerPosition, setMarkerPosition] = useState(center);
