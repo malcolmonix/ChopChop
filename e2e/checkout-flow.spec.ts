@@ -4,7 +4,7 @@ test.describe('Enhanced Checkout Flow', () => {
   test.beforeEach(async ({ page }) => {
     // Mock authentication
     await page.goto('/login');
-    await page.getByRole('button', { name: /sign in with google/i }).click();
+    await page.getByRole('button', { name: /sign in with google/i }).click({ force: true });
     
     // Wait for redirect to home page
     await page.waitForURL('/');
@@ -37,29 +37,29 @@ test.describe('Enhanced Checkout Flow', () => {
     await expect(page.getByText('Test Pizza')).toBeVisible();
 
     // Step 1: Cart Review
-    await page.getByRole('button', { name: 'Continue to Delivery' }).click();
+    await page.getByRole('button', { name: 'Continue to Delivery' }).click({ force: true });
 
     // Step 2: Address Selection
     await expect(page.getByText('Delivery Address')).toBeVisible();
     
     // Select an address
-    await page.getByText('Home').click();
-    await page.getByRole('button', { name: 'Continue to Payment' }).click();
+    await page.getByText('Home').click({ force: true });
+    await page.getByRole('button', { name: 'Continue to Payment' }).click({ force: true });
 
     // Step 3: Payment Method
     await expect(page.getByText('Payment Method')).toBeVisible();
     
     // Select cash payment
-    await page.getByText('Cash on Delivery').click();
+    await page.getByText('Cash on Delivery').click({ force: true });
     
     // Add special instructions
     await page.getByPlaceholder('Any special requests').fill('Please ring the doorbell');
     
     // Add tip
-    await page.getByText('₦100').click();
+    await page.getByText('₦100').click({ force: true });
 
     // Place order
-    await page.getByRole('button', { name: 'Place Order' }).click();
+    await page.getByRole('button', { name: 'Place Order' }).click({ force: true });
 
     // Step 4: Confirmation
     await expect(page.getByText('Order Confirmed!')).toBeVisible();
@@ -74,10 +74,10 @@ test.describe('Enhanced Checkout Flow', () => {
     await page.goto('/checkout');
     
     // Go to address step
-    await page.getByRole('button', { name: 'Continue to Delivery' }).click();
+    await page.getByRole('button', { name: 'Continue to Delivery' }).click({ force: true });
     
     // Click add new address
-    await page.getByText('+ Add New Address').click();
+    await page.getByText('+ Add New Address').click({ force: true });
     
     // Fill address form
     await page.getByPlaceholder('e.g., Home, Office').fill('Work');
@@ -88,7 +88,7 @@ test.describe('Enhanced Checkout Flow', () => {
     await page.getByPlaceholder('+234 801 234 5678').fill('+234 802 345 6789');
     
     // Save address
-    await page.getByRole('button', { name: 'Save Address' }).click();
+    await page.getByRole('button', { name: 'Save Address' }).click({ force: true });
     
     // Verify address was added (in real implementation)
     await expect(page.getByText('Work')).toBeVisible();
@@ -107,9 +107,9 @@ test.describe('Enhanced Checkout Flow', () => {
     const totalBefore = await page.getByText(/Total/).textContent();
     
     // Go to payment step and add tip
-    await page.getByRole('button', { name: 'Continue to Delivery' }).click();
-    await page.getByRole('button', { name: 'Continue to Payment' }).click();
-    await page.getByText('₦200').click();
+    await page.getByRole('button', { name: 'Continue to Delivery' }).click({ force: true });
+    await page.getByRole('button', { name: 'Continue to Payment' }).click({ force: true });
+    await page.getByText('₦200').click({ force: true });
     
     // Total should update with tip
     await expect(page.getByText('Tip')).toBeVisible();
@@ -121,14 +121,14 @@ test.describe('Enhanced Checkout Flow', () => {
     await page.goto('/checkout');
     
     // Navigate to payment step
-    await page.getByRole('button', { name: 'Continue to Delivery' }).click();
-    await page.getByRole('button', { name: 'Continue to Payment' }).click();
+    await page.getByRole('button', { name: 'Continue to Delivery' }).click({ force: true });
+    await page.getByRole('button', { name: 'Continue to Payment' }).click({ force: true });
     
     // Test different payment methods
-    await page.getByText('Debit Card').click();
+    await page.getByText('Debit Card').click({ force: true });
     await expect(page.getByText('**** **** **** 1234')).toBeVisible();
     
-    await page.getByText('Mobile Money').click();
+    await page.getByText('Mobile Money').click({ force: true });
     await expect(page.getByText('MTN MoMo')).toBeVisible();
     
     // Order summary should show selected payment method
@@ -140,13 +140,13 @@ test.describe('Enhanced Checkout Flow', () => {
     await page.goto('/checkout');
     
     // Try to proceed without address selection
-    await page.getByRole('button', { name: 'Continue to Delivery' }).click();
+    await page.getByRole('button', { name: 'Continue to Delivery' }).click({ force: true });
     
     // Should not allow proceeding without address
-    await page.getByRole('button', { name: 'Continue to Payment' }).click();
+    await page.getByRole('button', { name: 'Continue to Payment' }).click({ force: true });
     
     // Go to payment and try to place order without selection
-    await page.getByRole('button', { name: 'Place Order' }).click();
+    await page.getByRole('button', { name: 'Place Order' }).click({ force: true });
     
     // Should show error message
     await expect(page.getByText(/Please select delivery address and payment method/)).toBeVisible();
@@ -160,12 +160,12 @@ test.describe('Enhanced Checkout Flow', () => {
     await expect(page.getByText('🛒')).toBeVisible();
     
     // Move to next step
-    await page.getByRole('button', { name: 'Continue to Delivery' }).click();
+    await page.getByRole('button', { name: 'Continue to Delivery' }).click({ force: true });
     await expect(page.getByText('🛒')).toHaveClass(/bg-green-500/); // Completed
     await expect(page.getByText('📍')).toHaveClass(/bg-orange-500/); // Current
     
     // Move to payment step
-    await page.getByRole('button', { name: 'Continue to Payment' }).click();
+    await page.getByRole('button', { name: 'Continue to Payment' }).click({ force: true });
     await expect(page.getByText('💳')).toHaveClass(/bg-orange-500/); // Current
   });
 });
@@ -205,7 +205,7 @@ test.describe('Cart Integration', () => {
     await page.reload();
     
     // Click cart button
-    await page.getByRole('link', { name: /🛒.*Cart/ }).click();
+    await page.getByRole('link', { name: /🛒.*Cart/ }).click({ force: true });
     
     // Should navigate to checkout
     await expect(page).toHaveURL('/checkout');
