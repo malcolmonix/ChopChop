@@ -1,10 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
+import dynamic from 'next/dynamic';
 import { withAuth } from '@/lib/components/protected-route';
 import { useCart } from '@/lib/context/cart.context';
 import { useFirebaseAuth } from '@/lib/context/firebase-auth.context';
 import { useToast } from '@/lib/context/toast.context';
 import { OrderService } from '@/lib/firebase/orders';
+import { useUserProfile } from '@/lib/hooks/useUserProfile';
+import { UserAddress } from '@/lib/services/user-profile';
+
+// Dynamically import EnhancedLocationPicker to avoid SSR issues with Leaflet
+const EnhancedLocationPicker = dynamic(
+  () => import('@/lib/components/enhanced-location-picker').then(mod => mod.EnhancedLocationPicker),
+  { ssr: false }
+);
 
 // Types for our checkout flow
 interface DeliveryAddress {
@@ -36,43 +45,17 @@ function CheckoutPage() {
   const { user } = useFirebaseAuth();
   const { state, total, count, setQuantity, removeItem, clear } = useCart();
   const { showToast } = useToast();
+  const { addresses, addAddress, updateAddress, removeAddress, getDefaultAddress, loading: profileLoading } = useUserProfile();
 
   const [currentStep, setCurrentStep] = useState<CheckoutStep>('cart');
-  const [selectedAddress, setSelectedAddress] = useState<DeliveryAddress | null>(null);
+  const [selectedAddress, setSelectedAddress] = useState<UserAddress | null>(null);
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod | null>(null);
   const [orderInstructions, setOrderInstructions] = useState('');
   const [tip, setTip] = useState(0);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [orderResult, setOrderResult] = useState<any>(null);
-
-  // Sample addresses - in production, these would come from user's saved addresses
-  const savedAddresses: DeliveryAddress[] = [
-    {
-      id: '1',
-      name: 'Home',
-      addressLine1: '123 Main Street',
-      addressLine2: 'Apt 4B',
-      city: 'Lagos',
-      state: 'Lagos',
-      zipCode: '100001',
-      phone: '+234 801 234 5678',
-      isDefault: true,
-      latitude: 6.5244,
-      longitude: 3.3792
-    },
-    {
-      id: '2',
-      name: 'Office',
-      addressLine1: '456 Business District',
-      city: 'Lagos',
-      state: 'Lagos',
-      zipCode: '100271',
-      phone: '+234 801 234 5678',
-      isDefault: false,
-      latitude: 6.4541,
-      longitude: 3.3947
-    }
-  ];
+  const [showAddressDialog, setShowAddressDialog] = useState(false);
+  const [addressToEdit, setAddressToEdit] = useState<UserAddress | null>(null);
 
   // Sample payment methods
   const paymentMethods: PaymentMethod[] = [
@@ -108,15 +91,15 @@ function CheckoutPage() {
 
   // Initialize default selections
   useEffect(() => {
-    if (!selectedAddress) {
-      const defaultAddress = savedAddresses.find(addr => addr.isDefault) || savedAddresses[0];
+    if (addresses.length > 0 && !selectedAddress) {
+      const defaultAddress = getDefaultAddress() || addresses[0];
       setSelectedAddress(defaultAddress);
     }
     if (!selectedPayment) {
       const defaultPayment = paymentMethods.find(pm => pm.isDefault) || paymentMethods[0];
       setSelectedPayment(defaultPayment);
     }
-  }, []);
+  }, [addresses]);
 
   // Redirect if cart is empty
   useEffect(() => {
@@ -168,7 +151,7 @@ function CheckoutPage() {
           quantity: item.quantity,
           price: item.price
         };
-        
+
         // Only add optional fields if they have values
         if (item.variations) {
           orderItem.variation = JSON.stringify(item.variations);
@@ -176,14 +159,14 @@ function CheckoutPage() {
         if (item.addons) {
           orderItem.addons = JSON.stringify(item.addons);
         }
-        
+
         return orderItem;
       }),
       paymentMethod: 'CASH',
       address: {
-        deliveryAddress: `${selectedAddress.addressLine1}, ${selectedAddress.city}`,
-        latitude: selectedAddress.latitude,
-        longitude: selectedAddress.longitude
+        deliveryAddress: `${selectedAddress.street}, ${selectedAddress.city}`,
+        latitude: selectedAddress.coordinates.lat,
+        longitude: selectedAddress.coordinates.lng
       },
       deliveryCharges: deliveryFee,
       tipping: tip,
@@ -219,9 +202,9 @@ function CheckoutPage() {
       tipping: tip,
       taxationAmount: tax,
       address: {
-        deliveryAddress: `${selectedAddress.addressLine1}, ${selectedAddress.city}`,
-        latitude: selectedAddress.latitude,
-        longitude: selectedAddress.longitude
+        deliveryAddress: `${selectedAddress.street}, ${selectedAddress.city}`,
+        latitude: selectedAddress.coordinates.lat,
+        longitude: selectedAddress.coordinates.lng
       },
       orderDate: new Date().toISOString(),
       isPickedUp: false,
@@ -232,7 +215,7 @@ function CheckoutPage() {
 
     // Store order data in session storage for payment completion
     sessionStorage.setItem('pendingOrder', JSON.stringify(orderData));
-    
+
     // Redirect to payment gateway based on payment method
     if (selectedPayment.type === 'card') {
       router.push(`/payment/card?amount=${finalTotal}&method=card`);
@@ -257,13 +240,12 @@ function CheckoutPage() {
           {steps.map((step, index) => (
             <div key={step.id} className="flex items-center">
               <div
-                className={`flex items-center justify-center w-10 h-10 rounded-full text-sm font-medium ${
-                  currentStep === step.id
-                    ? 'bg-orange-500 text-white'
-                    : steps.findIndex(s => s.id === currentStep) > index
+                className={`flex items-center justify-center w-10 h-10 rounded-full text-sm font-medium ${currentStep === step.id
+                  ? 'bg-orange-500 text-white'
+                  : steps.findIndex(s => s.id === currentStep) > index
                     ? 'bg-green-500 text-white'
                     : 'bg-gray-200 text-gray-600'
-                }`}
+                  }`}
               >
                 {step.icon}
               </div>
@@ -292,7 +274,7 @@ function CheckoutPage() {
             <p className="text-gray-600 mb-4">
               Thank you for your order. Your food is being prepared.
             </p>
-            
+
             <div className="bg-gray-50 rounded-lg p-4 mb-6">
               <div className="text-sm text-gray-600">Order ID</div>
               <div className="text-lg font-bold text-gray-900">{orderResult.orderId}</div>
@@ -404,44 +386,108 @@ function CheckoutPage() {
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <h2 className="text-xl font-bold text-gray-900 mb-4">Delivery Address</h2>
 
-                <div className="space-y-4 mb-6">
-                  {savedAddresses.map((address) => (
-                    <div
-                      key={address.id}
-                      onClick={() => setSelectedAddress(address)}
-                      className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                        selectedAddress?.id === address.id
-                          ? 'border-orange-500 bg-orange-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <div className="font-medium text-gray-900">{address.name}</div>
-                          <div className="text-sm text-gray-600">
-                            {address.addressLine1}
-                            {address.addressLine2 && `, ${address.addressLine2}`}
-                          </div>
-                          <div className="text-sm text-gray-600">
-                            {address.city}, {address.state} {address.zipCode}
-                          </div>
-                          <div className="text-sm text-gray-600">{address.phone}</div>
-                        </div>
-                        <div className="ml-4">
-                          {selectedAddress?.id === address.id && (
-                            <div className="w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center">
-                              <span className="text-white text-xs">✓</span>
-                            </div>
-                          )}
-                        </div>
+                {profileLoading ? (
+                  <div className="flex justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+                  </div>
+                ) : (
+                  <div className="space-y-4 mb-6">
+                    {addresses.length === 0 ? (
+                      <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                        <p className="text-gray-500 mb-4">No addresses saved yet</p>
+                        <button
+                          onClick={() => {
+                            setAddressToEdit(null);
+                            setShowAddressDialog(true);
+                          }}
+                          className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+                        >
+                          Add Your First Address
+                        </button>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ) : (
+                      addresses.map((address) => (
+                        <div
+                          key={address.id}
+                          className={`p-4 border rounded-lg transition-colors ${selectedAddress?.id === address.id
+                            ? 'border-orange-500 bg-orange-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div
+                              className="flex-1 cursor-pointer"
+                              onClick={() => setSelectedAddress(address)}
+                            >
+                              <div className="flex items-center space-x-2">
+                                <div className="font-medium text-gray-900">{address.label}</div>
+                                {address.isDefault && (
+                                  <span className="px-2 py-0.5 text-xs bg-gray-200 text-gray-600 rounded-full">Default</span>
+                                )}
+                              </div>
+                              <div className="text-sm text-gray-600 mt-1">
+                                {address.street}
+                              </div>
+                              <div className="text-sm text-gray-600">
+                                {address.city}, {address.state} {address.postalCode}
+                              </div>
+                              {address.instructions && (
+                                <div className="text-xs text-gray-500 mt-1 italic">
+                                  Note: {address.instructions}
+                                </div>
+                              )}
+                            </div>
+                            <div className="ml-4 flex flex-col space-y-2">
+                              {selectedAddress?.id === address.id && (
+                                <div className="w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center self-end mb-2">
+                                  <span className="text-white text-xs">✓</span>
+                                </div>
+                              )}
+                              <div className="flex space-x-2">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setAddressToEdit(address);
+                                    setShowAddressDialog(true);
+                                  }}
+                                  className="text-xs text-blue-600 hover:text-blue-800"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if (confirm('Are you sure you want to delete this address?')) {
+                                      await removeAddress(address.id);
+                                      if (selectedAddress?.id === address.id) {
+                                        setSelectedAddress(null);
+                                      }
+                                    }
+                                  }}
+                                  className="text-xs text-red-600 hover:text-red-800"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
 
-                <button className="w-full py-3 border border-orange-500 text-orange-500 rounded-lg hover:bg-orange-50 transition-colors mb-4">
-                  + Add New Address
-                </button>
+                {addresses.length > 0 && (
+                  <button
+                    onClick={() => {
+                      setAddressToEdit(null);
+                      setShowAddressDialog(true);
+                    }}
+                    className="w-full py-3 border border-orange-500 text-orange-500 rounded-lg hover:bg-orange-50 transition-colors mb-4"
+                  >
+                    + Add New Address
+                  </button>
+                )}
 
                 <div className="flex space-x-4">
                   <button
@@ -461,6 +507,30 @@ function CheckoutPage() {
               </div>
             )}
 
+            <EnhancedLocationPicker
+              isOpen={showAddressDialog}
+              onClose={() => setShowAddressDialog(false)}
+              onLocationSaved={async (address) => {
+                try {
+                  if (addressToEdit) {
+                    await updateAddress(addressToEdit.id, address);
+                    showToast('success', 'Address updated successfully');
+                  } else {
+                    await addAddress(address);
+                    showToast('success', 'Address added successfully');
+                  }
+                  // Small delay to ensure state updates propagate
+                  await new Promise(resolve => setTimeout(resolve, 100));
+                  setShowAddressDialog(false);
+                } catch (error) {
+                  console.error('Error saving address:', error);
+                  showToast('error', 'Failed to save address');
+                }
+              }}
+              currentAddress={addressToEdit}
+              autoSave={false}
+            />
+
             {/* Payment Method Step */}
             {currentStep === 'payment' && (
               <div className="bg-white rounded-lg shadow-sm p-6">
@@ -471,11 +541,10 @@ function CheckoutPage() {
                     <div
                       key={method.id}
                       onClick={() => setSelectedPayment(method)}
-                      className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                        selectedPayment?.id === method.id
-                          ? 'border-orange-500 bg-orange-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
+                      className={`p-4 border rounded-lg cursor-pointer transition-colors ${selectedPayment?.id === method.id
+                        ? 'border-orange-500 bg-orange-50'
+                        : 'border-gray-200 hover:border-gray-300'
+                        }`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-3">
@@ -524,11 +593,10 @@ function CheckoutPage() {
                       <button
                         key={amount}
                         onClick={() => setTip(amount)}
-                        className={`py-2 px-3 text-sm rounded-lg border transition-colors ${
-                          tip === amount
-                            ? 'border-orange-500 bg-orange-50 text-orange-700'
-                            : 'border-gray-300 text-gray-700 hover:border-gray-400'
-                        }`}
+                        className={`py-2 px-3 text-sm rounded-lg border transition-colors ${tip === amount
+                          ? 'border-orange-500 bg-orange-50 text-orange-700'
+                          : 'border-gray-300 text-gray-700 hover:border-gray-400'
+                          }`}
                       >
                         {amount === 0 ? 'No Tip' : `₦${amount}`}
                       </button>
@@ -548,10 +616,10 @@ function CheckoutPage() {
                     disabled={!selectedPayment || isPlacingOrder}
                     className="flex-1 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isPlacingOrder 
-                      ? 'Processing...' 
-                      : selectedPayment?.type === 'cash' 
-                        ? 'Complete Order' 
+                    {isPlacingOrder
+                      ? 'Processing...'
+                      : selectedPayment?.type === 'cash'
+                        ? 'Complete Order'
                         : 'Proceed to Payment'
                     }
                   </button>
@@ -595,9 +663,9 @@ function CheckoutPage() {
               {selectedAddress && (
                 <div className="mt-6 pt-4 border-t border-gray-200">
                   <div className="text-sm text-gray-600 mb-1">Delivering to:</div>
-                  <div className="text-sm font-medium">{selectedAddress.name}</div>
+                  <div className="text-sm font-medium">{selectedAddress.label}</div>
                   <div className="text-xs text-gray-500">
-                    {selectedAddress.addressLine1}, {selectedAddress.city}
+                    {selectedAddress.street}, {selectedAddress.city}
                   </div>
                 </div>
               )}

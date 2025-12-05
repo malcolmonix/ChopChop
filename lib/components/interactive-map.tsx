@@ -1,6 +1,18 @@
-// Interactive Map Component for Location Picking
-import React, { useEffect, useRef, useState } from 'react';
+'use client';
+
+import React, { useState, useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { locationService } from '../services/location-service';
+
+// Fix for default marker icons in Leaflet
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
 
 interface InteractiveMapProps {
   center: { lat: number; lng: number };
@@ -9,208 +21,127 @@ interface InteractiveMapProps {
   zoom?: number;
 }
 
-export const InteractiveMap: React.FC<InteractiveMapProps> = ({
+// Custom marker icon
+const createCustomIcon = () => {
+  return L.divIcon({
+    className: 'custom-marker',
+    html: `
+      <div style="position: relative;">
+        <div style="
+          width: 30px;
+          height: 30px;
+          background: #ff6b35;
+          border: 3px solid white;
+          border-radius: 50%;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-weight: bold;
+          font-size: 18px;
+        ">📍</div>
+      </div>
+    `,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+  });
+};
+
+// Component to handle map events
+function MapEventHandler({ onLocationSelect }: { onLocationSelect: (lat: number, lng: number) => void }) {
+  useMapEvents({
+    click: (e) => {
+      onLocationSelect(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+}
+
+// Component to update map center when prop changes
+function MapUpdater({ center }: { center: { lat: number; lng: number } }) {
+  const map = useMap();
+
+  useEffect(() => {
+    map.setView([center.lat, center.lng]);
+  }, [center.lat, center.lng, map]);
+
+  return null;
+}
+
+export const InteractiveMap = ({
   center,
   onLocationSelect,
   height = '400px',
   zoom = 15
-}) => {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const [mapInstance, setMapInstance] = useState<any>(null);
-  const [markerPosition, setMarkerPosition] = useState(center);
+}: InteractiveMapProps) => {
+  const [markerPosition, setMarkerPosition] = useState<{ lat: number; lng: number }>(center);
   const [isLoadingAddress, setIsLoadingAddress] = useState(false);
   const [currentAddress, setCurrentAddress] = useState<string>('');
-  const [mapError, setMapError] = useState<string | null>(null);
+  const markerRef = useRef<L.Marker>(null);
 
-  // Load Leaflet dynamically
+  // Update marker position when center prop changes
   useEffect(() => {
-    let mounted = true;
+    setMarkerPosition(center);
+  }, [center]);
 
-    const loadLeaflet = async () => {
-      try {
-        // Try to load Leaflet from CDN
-        if (typeof window !== 'undefined' && !window.L) {
-          // Load CSS
-          const link = document.createElement('link');
-          link.rel = 'stylesheet';
-          link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-          document.head.appendChild(link);
+  const handleLocationClick = async (lat: number, lng: number) => {
+    setMarkerPosition({ lat, lng });
+    setIsLoadingAddress(true);
 
-          // Load JS
-          const script = document.createElement('script');
-          script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-          script.onload = () => {
-            if (mounted) {
-              initializeMap();
-            }
-          };
-          script.onerror = () => {
-            setMapError('Failed to load map library');
-          };
-          document.head.appendChild(script);
-        } else if (window.L) {
-          initializeMap();
-        }
-      } catch (error) {
-        setMapError('Failed to initialize map');
-      }
-    };
-
-    const initializeMap = () => {
-      if (!mapRef.current || mapInstance) return;
-
-      try {
-        const L = window.L;
-        
-        // Create map
-        const map = L.map(mapRef.current).setView([center.lat, center.lng], zoom);
-        
-        // Add tile layer
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
-
-        // Create custom icon
-        const customIcon = L.divIcon({
-          className: 'custom-marker',
-          html: `
-            <div style="
-              width: 30px; 
-              height: 30px; 
-              background: #ff6b35; 
-              border: 3px solid white; 
-              border-radius: 50%; 
-              box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              color: white;
-              font-weight: bold;
-              cursor: grab;
-            ">📍</div>
-          `,
-          iconSize: [30, 30],
-          iconAnchor: [15, 15]
+    try {
+      const result = await locationService.reverseGeocode(lat, lng);
+      if (result) {
+        setCurrentAddress(result.formattedAddress);
+        onLocationSelect({
+          lat,
+          lng,
+          address: result.formattedAddress
         });
-
-        // Add draggable marker
-        const marker = L.marker([center.lat, center.lng], { 
-          icon: customIcon,
-          draggable: true 
-        }).addTo(map);
-
-        // Handle marker drag
-        marker.on('dragend', async (e) => {
-          const position = e.target.getLatLng();
-          setMarkerPosition({ lat: position.lat, lng: position.lng });
-          
-          // Reverse geocode to get address
-          setIsLoadingAddress(true);
-          try {
-            const result = await locationService.reverseGeocode(position.lat, position.lng);
-            if (result) {
-              setCurrentAddress(result.formattedAddress);
-              onLocationSelect({
-                lat: position.lat,
-                lng: position.lng,
-                address: result.formattedAddress
-              });
-            }
-          } catch (error) {
-            console.error('Reverse geocoding failed:', error);
-          } finally {
-            setIsLoadingAddress(false);
-          }
-        });
-
-        // Handle map click
-        map.on('click', async (e) => {
-          const { lat, lng } = e.latlng;
-          marker.setLatLng([lat, lng]);
-          setMarkerPosition({ lat, lng });
-          
-          setIsLoadingAddress(true);
-          try {
-            const result = await locationService.reverseGeocode(lat, lng);
-            if (result) {
-              setCurrentAddress(result.formattedAddress);
-              onLocationSelect({
-                lat,
-                lng,
-                address: result.formattedAddress
-              });
-            }
-          } catch (error) {
-            console.error('Reverse geocoding failed:', error);
-          } finally {
-            setIsLoadingAddress(false);
-          }
-        });
-
-        setMapInstance(map);
-      } catch (error) {
-        console.error('Error initializing map:', error);
-        setMapError('Failed to initialize map');
       }
-    };
-
-    loadLeaflet();
-
-    return () => {
-      mounted = false;
-      if (mapInstance) {
-        mapInstance.remove();
-      }
-    };
-  }, []);
-
-  // Update marker position when center changes
-  useEffect(() => {
-    if (mapInstance && window.L) {
-      const marker = mapInstance.eachLayer((layer: any) => {
-        if (layer.options && layer.options.draggable) {
-          layer.setLatLng([center.lat, center.lng]);
-        }
-      });
-      mapInstance.setView([center.lat, center.lng], zoom);
-      setMarkerPosition(center);
+    } catch (error) {
+      console.error('Reverse geocoding failed:', error);
+    } finally {
+      setIsLoadingAddress(false);
     }
-  }, [center, mapInstance]);
+  };
 
-  if (mapError) {
-    return (
-      <div 
-        className="flex flex-col items-center justify-center bg-gray-100 rounded-lg"
-        style={{ height }}
-      >
-        <div className="text-center p-6">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Map Error</h3>
-          <p className="text-gray-600 mb-4">{mapError}</p>
-          <div className="space-y-2 text-sm text-gray-500">
-            <p>Using fallback location picker...</p>
-            <p>📍 Current: {markerPosition.lat.toFixed(6)}, {markerPosition.lng.toFixed(6)}</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const handleMarkerDrag = (event: L.DragEndEvent) => {
+    const marker = event.target;
+    const position = marker.getLatLng();
+    handleLocationClick(position.lat, position.lng);
+  };
 
   return (
-    <div className="relative">
-      <div 
-        ref={mapRef} 
-        style={{ height, width: '100%' }} 
-        className="rounded-lg overflow-hidden"
-      />
-      
+    <div className="relative rounded-lg overflow-hidden" style={{ height, width: '100%' }}>
+      <MapContainer
+        center={[center.lat, center.lng]}
+        zoom={zoom}
+        style={{ height: '100%', width: '100%' }}
+        zoomControl={true}
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+
+        <MapEventHandler onLocationSelect={handleLocationClick} />
+        <MapUpdater center={center} />
+
+        <Marker
+          position={[markerPosition.lat, markerPosition.lng]}
+          draggable={true}
+          eventHandlers={{
+            dragend: handleMarkerDrag,
+          }}
+          icon={createCustomIcon()}
+          ref={markerRef}
+        />
+      </MapContainer>
+
       {/* Loading overlay */}
       {isLoadingAddress && (
-        <div className="absolute top-4 left-4 bg-white px-3 py-2 rounded-lg shadow-md flex items-center space-x-2">
+        <div className="absolute top-4 left-4 bg-white px-3 py-2 rounded-lg shadow-md flex items-center space-x-2 z-[1000]">
           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-500"></div>
           <span className="text-sm text-gray-600">Getting address...</span>
         </div>
@@ -218,7 +149,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
       {/* Address display */}
       {currentAddress && (
-        <div className="absolute bottom-4 left-4 right-4 bg-white p-3 rounded-lg shadow-md">
+        <div className="absolute bottom-4 left-4 right-4 bg-white p-3 rounded-lg shadow-md z-[1000]">
           <div className="flex items-start space-x-2">
             <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -233,21 +164,22 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       )}
 
       {/* Instructions */}
-      <div className="absolute top-4 right-4 bg-white p-2 rounded-lg shadow-md">
+      <div className="absolute top-4 right-4 bg-white p-2 rounded-lg shadow-md z-[1000]">
         <div className="text-xs text-gray-600 text-center">
           <div className="font-medium mb-1">📍 Drag pin or tap to select</div>
-          <div className="text-gray-500">
-            {markerPosition.lat.toFixed(4)}, {markerPosition.lng.toFixed(4)}
-          </div>
         </div>
       </div>
+
+      {/* CSS for custom marker */}
+      <style jsx global>{`
+        .custom-marker {
+          background: transparent !important;
+          border: none !important;
+        }
+        .leaflet-container {
+          font-family: inherit;
+        }
+      `}</style>
     </div>
   );
 };
-
-// Type declaration for Leaflet global
-declare global {
-  interface Window {
-    L: any;
-  }
-}

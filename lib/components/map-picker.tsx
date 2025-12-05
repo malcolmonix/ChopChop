@@ -1,7 +1,7 @@
 // Interactive Map Picker Component
 import React, { useState, useEffect, useRef } from 'react';
 import { UserAddress } from '../services/user-profile';
-import { locationService, LocationResult } from '../services/location-service';
+import { locationService, LocationResult, PlaceAutocompleteResult } from '../services/location-service';
 
 // Simple map types (we'll use Leaflet which doesn't require API keys)
 interface MapPickerProps {
@@ -18,11 +18,84 @@ export const MapPicker: React.FC<MapPickerProps> = ({
   className = ''
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
-  const [map, setMap] = useState<any>(null);  
+  const [map, setMap] = useState<any>(null);
   const [selectedLocation, setSelectedLocation] = useState<LocationResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const markerRef = useRef<any>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<PlaceAutocompleteResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [hasTriedCurrentLocation, setHasTriedCurrentLocation] = useState(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [currentUserLocation, setCurrentUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Try to get user's current location on mount
+  useEffect(() => {
+    const getUserLocation = async () => {
+      if (!hasTriedCurrentLocation) {
+        const location = await locationService.getCurrentLocation();
+        if (location) {
+          setCurrentUserLocation(location);
+          setHasTriedCurrentLocation(true);
+        }
+      }
+    };
+    getUserLocation();
+  }, [hasTriedCurrentLocation]);
+
+  // Handle search with debouncing
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (searchQuery.length > 2) {
+      searchTimeoutRef.current = setTimeout(async () => {
+        setIsSearching(true);
+        try {
+          const results = await locationService.getAutocompleteSuggestions(
+            searchQuery,
+            currentUserLocation || undefined
+          );
+          setSearchResults(results);
+        } catch (error) {
+          console.error('Search failed:', error);
+          setSearchResults([]);
+        } finally {
+          setIsSearching(false);
+        }
+      }, 300);
+    } else {
+      setSearchResults([]);
+    }
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchQuery, currentUserLocation]);
+
+  // Handle place selection from search
+  const handlePlaceSelect = async (placeResult: PlaceAutocompleteResult) => {
+    setIsLoading(true);
+    setSearchQuery(placeResult.description);
+    setSearchResults([]);
+
+    try {
+      const locationResult = await locationService.getPlaceDetails(placeResult.placeId);
+      if (locationResult && map && markerRef.current) {
+        map.setView([locationResult.coordinates.lat, locationResult.coordinates.lng], 15);
+        markerRef.current.setLatLng([locationResult.coordinates.lat, locationResult.coordinates.lng]);
+        await handleLocationChange(locationResult.coordinates.lat, locationResult.coordinates.lng);
+      }
+    } catch (error) {
+      console.error('Failed to get place details:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Load Leaflet dynamically
   useEffect(() => {
@@ -59,8 +132,11 @@ export const MapPicker: React.FC<MapPickerProps> = ({
     if (!mapRef.current || map) return;
 
     try {
+      // Use current location if available, otherwise use initialLocation
+      const startLocation = currentUserLocation || initialLocation;
+
       // Create map
-      const newMap = L.map(mapRef.current).setView([initialLocation.lat, initialLocation.lng], 13);
+      const newMap = L.map(mapRef.current).setView([startLocation.lat, startLocation.lng], currentUserLocation ? 15 : 13);
 
       // Add OpenStreetMap tiles (free)
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -97,9 +173,9 @@ export const MapPicker: React.FC<MapPickerProps> = ({
       });
 
       // Add initial marker
-      const marker = L.marker([initialLocation.lat, initialLocation.lng], { 
+      const marker = L.marker([startLocation.lat, startLocation.lng], {
         icon: customIcon,
-        draggable: true 
+        draggable: true
       }).addTo(newMap);
 
       // Handle marker drag
@@ -120,7 +196,7 @@ export const MapPicker: React.FC<MapPickerProps> = ({
       setIsMapLoaded(true);
 
       // Get initial location address
-      handleLocationChange(initialLocation.lat, initialLocation.lng);
+      handleLocationChange(startLocation.lat, startLocation.lng);
     } catch (error) {
       console.error('Failed to initialize map:', error);
     }
@@ -128,7 +204,7 @@ export const MapPicker: React.FC<MapPickerProps> = ({
 
   const handleLocationChange = async (lat: number, lng: number) => {
     setIsLoading(true);
-    
+
     try {
       const locationResult = await locationService.reverseGeocode(lat, lng);
       if (locationResult) {
@@ -162,16 +238,20 @@ export const MapPicker: React.FC<MapPickerProps> = ({
 
   const handleCurrentLocation = async () => {
     setIsLoading(true);
-    
+
     try {
       const userLocation = await locationService.getCurrentLocation();
       if (userLocation && map && markerRef.current) {
-        map.setView([userLocation.lat, userLocation.lng], 15);
+        setCurrentUserLocation(userLocation);
+        map.setView([userLocation.lat, userLocation.lng], 16);
         markerRef.current.setLatLng([userLocation.lat, userLocation.lng]);
         await handleLocationChange(userLocation.lat, userLocation.lng);
+      } else {
+        alert('Unable to get your current location. Please check your location permissions and try again.');
       }
     } catch (error) {
       console.error('Failed to get current location:', error);
+      alert('Failed to get your current location. Please ensure location permissions are granted.');
     } finally {
       setIsLoading(false);
     }
@@ -193,14 +273,60 @@ export const MapPicker: React.FC<MapPickerProps> = ({
           </button>
         </div>
 
+        {/* Search Bar */}
+        <div className="p-4 border-b bg-gray-50">
+          <div className="relative">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+              placeholder="Search for a location..."
+            />
+            <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+              {isSearching ? (
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-orange-500"></div>
+              ) : (
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              )}
+            </div>
+          </div>
+
+          {/* Search Results */}
+          {searchResults.length > 0 && (
+            <div className="mt-2 border border-gray-200 rounded-lg max-h-48 overflow-y-auto bg-white">
+              {searchResults.map((result) => (
+                <button
+                  key={result.placeId}
+                  onClick={() => handlePlaceSelect(result)}
+                  className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 focus:bg-orange-50 focus:outline-none"
+                >
+                  <div className="flex items-start space-x-3">
+                    <svg className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 truncate">{result.mainText}</p>
+                      <p className="text-sm text-gray-500 truncate">{result.secondaryText}</p>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Map Container */}
         <div className="flex-1 relative">
-          <div 
-            ref={mapRef} 
+          <div
+            ref={mapRef}
             className="w-full h-full min-h-[400px]"
             style={{ minHeight: '400px' }}
           />
-          
+
           {/* Loading overlay */}
           {!isMapLoaded && (
             <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center">

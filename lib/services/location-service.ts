@@ -60,29 +60,29 @@ class LocationService {
       script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
       script.async = true;
       script.defer = true;
-      
+
       script.onload = () => {
         this.googleMaps = google.maps;
         this.initializeServices();
         resolve();
       };
-      
+
       script.onerror = () => {
         reject(new Error('Failed to load Google Maps API'));
       };
-      
+
       document.head.appendChild(script);
     });
   }
 
   private initializeServices(): void {
     if (!this.googleMaps) return;
-    
+
     // Create a hidden div for places service
     const div = document.createElement('div');
     div.style.display = 'none';
     document.body.appendChild(div);
-    
+
     this.placesService = new this.googleMaps.places.PlacesService(div);
     this.autocompleteService = new this.googleMaps.places.AutocompleteService();
   }
@@ -98,7 +98,7 @@ class LocationService {
       ]);
 
       const allResults: PlaceAutocompleteResult[] = [];
-      
+
       results.forEach((result) => {
         if (result.status === 'fulfilled' && result.value) {
           allResults.push(...result.value);
@@ -121,7 +121,7 @@ class LocationService {
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(input)}&limit=5&countrycodes=ng&addressdetails=1&dedupe=1`
       );
       const data = await response.json();
-      
+
       return data.map((item: any) => ({
         placeId: `nom_${item.place_id}` || Math.random().toString(),
         description: item.display_name,
@@ -141,7 +141,7 @@ class LocationService {
         `https://photon.komoot.io/api/?q=${encodeURIComponent(input)}&limit=5&osm_tag=place&osm_tag=amenity&osm_tag=shop&osm_tag=highway&bbox=2.7,4.3,14.7,13.9`
       );
       const data = await response.json();
-      
+
       return data.features?.map((item: any) => ({
         placeId: `photon_${item.properties.osm_id}` || Math.random().toString(),
         description: this.formatPhotonAddress(item.properties),
@@ -168,14 +168,14 @@ class LocationService {
       { name: 'Ajah', area: 'Lekki', state: 'Lagos', type: 'area' },
       { name: 'Magodo', area: 'Lagos Mainland', state: 'Lagos', type: 'area' },
       { name: 'Festac Town', area: 'Amuwo Odofin', state: 'Lagos', type: 'area' },
-      
+
       // Abuja areas
       { name: 'Wuse 2', area: 'Abuja Municipal', state: 'FCT', type: 'area' },
       { name: 'Garki', area: 'Abuja Municipal', state: 'FCT', type: 'area' },
       { name: 'Maitama', area: 'Abuja Municipal', state: 'FCT', type: 'area' },
       { name: 'Asokoro', area: 'Abuja Municipal', state: 'FCT', type: 'area' },
       { name: 'Gwarinpa', area: 'Abuja Municipal', state: 'FCT', type: 'area' },
-      
+
       // Popular landmarks
       { name: 'National Theatre Lagos', area: 'Surulere', state: 'Lagos', type: 'landmark' },
       { name: 'Lagos Airport', area: 'Ikeja', state: 'Lagos', type: 'airport' },
@@ -185,7 +185,7 @@ class LocationService {
     ];
 
     const query = input.toLowerCase();
-    const matches = localPlaces.filter(place => 
+    const matches = localPlaces.filter(place =>
       place.name.toLowerCase().includes(query) ||
       place.area.toLowerCase().includes(query)
     );
@@ -252,7 +252,7 @@ class LocationService {
     // Create cache key
     const locationKey = location ? `${location.lat.toFixed(4)},${location.lng.toFixed(4)}` : 'no-location';
     const cacheKey = `${input.toLowerCase()}_${locationKey}`;
-    
+
     // Check cache first
     const cached = await locationStorageService.getCachedLocation(cacheKey, 'address');
     if (cached && Array.isArray(cached)) {
@@ -312,7 +312,7 @@ class LocationService {
   async reverseGeocode(lat: number, lng: number): Promise<LocationResult | null> {
     // Create cache key
     const cacheKey = `${lat.toFixed(6)},${lng.toFixed(6)}`;
-    
+
     // Check cache first
     const cached = await locationStorageService.getCachedLocation(cacheKey, 'coordinate');
     if (cached) {
@@ -353,29 +353,52 @@ class LocationService {
     });
   }
 
-  // Get current user location
+  // Get current user location with improved reliability
   async getCurrentLocation(): Promise<{ lat: number; lng: number } | null> {
     return new Promise((resolve) => {
       if (!navigator.geolocation) {
+        console.warn('Geolocation not supported');
         resolve(null);
         return;
       }
 
+      const highAccuracyOptions = {
+        enableHighAccuracy: true,
+        timeout: 30000, // Increased timeout for better reliability
+        maximumAge: 30000, // Allow cached position up to 30 seconds
+      };
+
       navigator.geolocation.getCurrentPosition(
         (position) => {
+          console.log('Got high accuracy position:', position.coords.latitude, position.coords.longitude);
           resolve({
             lat: position.coords.latitude,
             lng: position.coords.longitude,
           });
         },
-        () => {
-          resolve(null);
+        (error) => {
+          console.warn('High accuracy geolocation failed, trying low accuracy:', error.message);
+          // Fallback to low accuracy
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              console.log('Got low accuracy position:', position.coords.latitude, position.coords.longitude);
+              resolve({
+                lat: position.coords.latitude,
+                lng: position.coords.longitude,
+              });
+            },
+            (error2) => {
+              console.error('Geolocation failed completely:', error2.message);
+              resolve(null);
+            },
+            {
+              enableHighAccuracy: false,
+              timeout: 30000,
+              maximumAge: 120000 // Allow older cached position as last resort
+            }
+          );
         },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 60000,
-        }
+        highAccuracyOptions
       );
     });
   }
@@ -383,7 +406,7 @@ class LocationService {
   // Parse Google Places result
   private parsePlaceResult(place: any): LocationResult {
     const addressComponents = this.parseAddressComponents(place.address_components || []);
-    
+
     return {
       placeId: place.place_id || '',
       formattedAddress: place.formatted_address || '',
@@ -398,7 +421,7 @@ class LocationService {
   // Parse Google Geocoder result
   private parseGeocodeResult(result: any): LocationResult {
     const addressComponents = this.parseAddressComponents(result.address_components);
-    
+
     return {
       placeId: result.place_id,
       formattedAddress: result.formatted_address,
@@ -416,7 +439,7 @@ class LocationService {
 
     components.forEach(component => {
       const types = component.types;
-      
+
       if (types.includes('street_number')) {
         result.street = (result.street || '') + component.long_name + ' ';
       } else if (types.includes('route')) {
@@ -445,7 +468,7 @@ class LocationService {
     try {
       const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&countrycodes=ng`);
       const data = await response.json();
-      
+
       if (data.length > 0) {
         const result = data[0];
         return {
@@ -476,7 +499,7 @@ class LocationService {
     try {
       const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`);
       const data = await response.json();
-      
+
       if (data && data.display_name) {
         return {
           placeId: data.place_id?.toString() || '',

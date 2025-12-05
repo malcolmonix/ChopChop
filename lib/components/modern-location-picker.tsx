@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { UserAddress } from '../services/user-profile';
 import { locationService, LocationResult, PlaceAutocompleteResult } from '../services/location-service';
-import { InteractiveMap } from './interactive-map';
+import { InteractiveMapWrapper as InteractiveMap } from './interactive-map-wrapper';
 
 interface ModernLocationPickerProps {
   onAddressSelect: (address: Partial<UserAddress>) => void;
@@ -66,7 +66,7 @@ export const ModernLocationPicker: React.FC<ModernLocationPickerProps> = ({
     if (activeTab === 'map' && !mapLoaded) {
       initializeMap();
     }
-  }, [activeTab, initializeMap, mapLoaded]);
+  }, [activeTab, mapLoaded]); // Removed initializeMap from dependencies
 
   // Debounced search
   useEffect(() => {
@@ -103,7 +103,7 @@ export const ModernLocationPicker: React.FC<ModernLocationPickerProps> = ({
 
   const handleMapLocationSelect = (location: { lat: number; lng: number; address?: string }) => {
     setMapCenter({ lat: location.lat, lng: location.lng });
-    
+
     if (location.address) {
       setSelectedLocation({
         placeId: 'map-selected',
@@ -127,7 +127,7 @@ export const ModernLocationPicker: React.FC<ModernLocationPickerProps> = ({
       if (location) {
         setCurrentUserLocation(location);
         setMapCenter(location);
-        
+
         // Reverse geocode to get address
         const locationResult = await locationService.reverseGeocode(location.lat, location.lng);
         if (locationResult) {
@@ -155,7 +155,7 @@ export const ModernLocationPicker: React.FC<ModernLocationPickerProps> = ({
       if (locationResult) {
         setSelectedLocation(locationResult);
         setMapCenter(locationResult.coordinates);
-        
+
         // Save to recent addresses
         const recentAddress: SavedAddress = {
           id: Date.now().toString(),
@@ -164,7 +164,7 @@ export const ModernLocationPicker: React.FC<ModernLocationPickerProps> = ({
           type: 'other',
           icon: '📍'
         };
-        
+
         const updatedRecent = [recentAddress, ...recentAddresses.slice(0, 4)];
         setRecentAddresses(updatedRecent);
         localStorage.setItem('recentAddresses', JSON.stringify(updatedRecent));
@@ -230,21 +230,19 @@ export const ModernLocationPicker: React.FC<ModernLocationPickerProps> = ({
         <div className="flex border-b bg-gray-50">
           <button
             onClick={() => setActiveTab('search')}
-            className={`flex-1 py-3 text-center font-medium transition-colors ${
-              activeTab === 'search'
+            className={`flex-1 py-3 text-center font-medium transition-colors ${activeTab === 'search'
                 ? 'text-orange-600 border-b-2 border-orange-600 bg-white'
                 : 'text-gray-500 hover:text-gray-700'
-            }`}
+              }`}
           >
             🔍 Search
           </button>
           <button
             onClick={() => setActiveTab('map')}
-            className={`flex-1 py-3 text-center font-medium transition-colors ${
-              activeTab === 'map'
+            className={`flex-1 py-3 text-center font-medium transition-colors ${activeTab === 'map'
                 ? 'text-orange-600 border-b-2 border-orange-600 bg-white'
                 : 'text-gray-500 hover:text-gray-700'
-            }`}
+              }`}
           >
             🗺️ Map
           </button>
@@ -372,27 +370,13 @@ export const ModernLocationPicker: React.FC<ModernLocationPickerProps> = ({
           {activeTab === 'map' && (
             <div className="h-96 relative">
               {/* Map Container */}
-              <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                {mapLoaded ? (
-                  <div className="text-center">
-                    <div className="w-16 h-16 bg-orange-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 616 0z" />
-                      </svg>
-                    </div>
-                    <p className="text-gray-600 mb-2">Interactive Map</p>
-                    <p className="text-sm text-gray-500">Drag the pin to select location</p>
-                    <p className="text-xs text-gray-400 mt-2">
-                      Lat: {mapCenter.lat.toFixed(6)}, Lng: {mapCenter.lng.toFixed(6)}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Loading map...</p>
-                  </div>
-                )}
+              <div className="w-full h-full bg-gray-100">
+                <InteractiveMap
+                  center={mapCenter}
+                  onLocationSelect={handleMapLocationSelect}
+                  height="100%"
+                  zoom={15}
+                />
               </div>
 
               {/* Map Controls */}
