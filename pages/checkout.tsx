@@ -168,7 +168,7 @@ function CheckoutPage() {
           quantity: item.quantity,
           price: item.price
         };
-        
+
         // Only add optional fields if they have values
         if (item.variations) {
           orderItem.variation = JSON.stringify(item.variations);
@@ -176,7 +176,7 @@ function CheckoutPage() {
         if (item.addons) {
           orderItem.addons = JSON.stringify(item.addons);
         }
-        
+
         return orderItem;
       }),
       paymentMethod: 'CASH',
@@ -206,40 +206,65 @@ function CheckoutPage() {
       throw new Error('Address and payment method are required');
     }
 
-    // Prepare order data for payment gateway
-    const orderData = {
-      restaurant: String(state.restaurantId),
-      orderInput: state.items.map((item) => ({
-        title: item.title || item.name,
-        quantity: item.quantity,
-        price: item.price
-      })),
-      paymentMethod: selectedPayment.type.toUpperCase(),
-      couponCode: null,
-      tipping: tip,
-      taxationAmount: tax,
-      address: {
-        deliveryAddress: `${selectedAddress.addressLine1}, ${selectedAddress.city}`,
-        latitude: selectedAddress.latitude,
-        longitude: selectedAddress.longitude
-      },
-      orderDate: new Date().toISOString(),
-      isPickedUp: false,
-      deliveryCharges: deliveryFee,
-      instructions: orderInstructions || null,
-      amount: finalTotal
-    };
+    try {
+      // Create pending order in Firebase first
+      const orderData = {
+        restaurant: Number(state.restaurantId),
+        restaurantName: state.restaurantName,
+        orderInput: state.items.map((item) => {
+          const orderItem: any = {
+            title: item.title || item.name || 'Unknown Item',
+            quantity: item.quantity,
+            price: item.price
+          };
 
-    // Store order data in session storage for payment completion
-    sessionStorage.setItem('pendingOrder', JSON.stringify(orderData));
-    
-    // Redirect to payment gateway based on payment method
-    if (selectedPayment.type === 'card') {
-      router.push(`/payment/card?amount=${finalTotal}&method=card`);
-    } else if (selectedPayment.type === 'wallet') {
-      router.push(`/payment/mobile-money?amount=${finalTotal}&method=wallet`);
-    } else if (selectedPayment.type === 'bank') {
-      router.push(`/payment/bank-transfer?amount=${finalTotal}&method=bank`);
+          if (item.variations) orderItem.variation = JSON.stringify(item.variations);
+          if (item.addons) orderItem.addons = JSON.stringify(item.addons);
+
+          return orderItem;
+        }),
+        paymentMethod: selectedPayment.type.toUpperCase(), // CARD, WALLET, BANK
+        address: {
+          deliveryAddress: `${selectedAddress.addressLine1}, ${selectedAddress.city}`,
+          latitude: selectedAddress.latitude,
+          longitude: selectedAddress.longitude
+        },
+        deliveryCharges: deliveryFee,
+        tipping: tip,
+        taxationAmount: tax,
+        instructions: orderInstructions || '',
+        isPickedUp: false,
+        customer: {
+          name: user?.displayName || 'Customer',
+          email: user?.email || 'customer@chopchop.tsx',
+          address: `${selectedAddress.addressLine1}, ${selectedAddress.city}`
+        }
+      };
+
+      // Place order with PENDING_PAYMENT status
+      const response = await OrderService.placeOrder(orderData);
+
+      // Redirect to payment gateway with order ID
+      const queryParams = new URLSearchParams({
+        amount: finalTotal.toString(),
+        method: selectedPayment.type,
+        orderId: response.firebaseId // Use Firebase ID for updates
+      });
+
+      if (selectedPayment.type === 'card') {
+        router.push(`/payment/card?${queryParams.toString()}`);
+      } else if (selectedPayment.type === 'wallet') {
+        router.push(`/payment/mobile-money?${queryParams.toString()}`);
+      } else if (selectedPayment.type === 'bank') {
+        router.push(`/payment/bank-transfer?${queryParams.toString()}`);
+      }
+
+      // Clear cart locally since order is persisted (will be PENDING until paid)
+      clear();
+
+    } catch (error: any) {
+      console.error('Failed to initiate payment:', error);
+      throw error;
     }
   };
 
@@ -257,13 +282,12 @@ function CheckoutPage() {
           {steps.map((step, index) => (
             <div key={step.id} className="flex items-center">
               <div
-                className={`flex items-center justify-center w-10 h-10 rounded-full text-sm font-medium ${
-                  currentStep === step.id
+                className={`flex items-center justify-center w-10 h-10 rounded-full text-sm font-medium ${currentStep === step.id
                     ? 'bg-orange-500 text-white'
                     : steps.findIndex(s => s.id === currentStep) > index
-                    ? 'bg-green-500 text-white'
-                    : 'bg-gray-200 text-gray-600'
-                }`}
+                      ? 'bg-green-500 text-white'
+                      : 'bg-gray-200 text-gray-600'
+                  }`}
               >
                 {step.icon}
               </div>
@@ -292,7 +316,7 @@ function CheckoutPage() {
             <p className="text-gray-600 mb-4">
               Thank you for your order. Your food is being prepared.
             </p>
-            
+
             <div className="bg-gray-50 rounded-lg p-4 mb-6">
               <div className="text-sm text-gray-600">Order ID</div>
               <div className="text-lg font-bold text-gray-900">{orderResult.orderId}</div>
@@ -409,11 +433,10 @@ function CheckoutPage() {
                     <div
                       key={address.id}
                       onClick={() => setSelectedAddress(address)}
-                      className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                        selectedAddress?.id === address.id
+                      className={`p-4 border rounded-lg cursor-pointer transition-colors ${selectedAddress?.id === address.id
                           ? 'border-orange-500 bg-orange-50'
                           : 'border-gray-200 hover:border-gray-300'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-start justify-between">
                         <div>
@@ -471,11 +494,10 @@ function CheckoutPage() {
                     <div
                       key={method.id}
                       onClick={() => setSelectedPayment(method)}
-                      className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                        selectedPayment?.id === method.id
+                      className={`p-4 border rounded-lg cursor-pointer transition-colors ${selectedPayment?.id === method.id
                           ? 'border-orange-500 bg-orange-50'
                           : 'border-gray-200 hover:border-gray-300'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-3">
@@ -524,11 +546,10 @@ function CheckoutPage() {
                       <button
                         key={amount}
                         onClick={() => setTip(amount)}
-                        className={`py-2 px-3 text-sm rounded-lg border transition-colors ${
-                          tip === amount
+                        className={`py-2 px-3 text-sm rounded-lg border transition-colors ${tip === amount
                             ? 'border-orange-500 bg-orange-50 text-orange-700'
                             : 'border-gray-300 text-gray-700 hover:border-gray-400'
-                        }`}
+                          }`}
                       >
                         {amount === 0 ? 'No Tip' : `₦${amount}`}
                       </button>
@@ -548,10 +569,10 @@ function CheckoutPage() {
                     disabled={!selectedPayment || isPlacingOrder}
                     className="flex-1 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isPlacingOrder 
-                      ? 'Processing...' 
-                      : selectedPayment?.type === 'cash' 
-                        ? 'Complete Order' 
+                    {isPlacingOrder
+                      ? 'Processing...'
+                      : selectedPayment?.type === 'cash'
+                        ? 'Complete Order'
                         : 'Proceed to Payment'
                     }
                   </button>

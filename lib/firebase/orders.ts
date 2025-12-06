@@ -76,24 +76,24 @@ export class OrderService {
       // Calculate order details
       const subtotal = orderInput.reduce((sum, item) => sum + (item.price * item.quantity), 0);
       const orderAmount = subtotal + deliveryCharges + tipping + taxationAmount;
-      
+
       // Determine order status based on payment method
       let orderStatus = 'PENDING';
       let paidAmount = 0;
-      
+
       if (paymentMethod === 'CASH') {
-        orderStatus = 'PENDING'; // Will be paid on delivery
+        orderStatus = 'CONFIRMED'; // Cash orders are confirmed immediately
         paidAmount = 0;
       } else if (paymentMethod === 'CARD' || paymentMethod === 'WALLET') {
-        orderStatus = 'CONFIRMED'; // Electronic payments - assume paid immediately
-        paidAmount = orderAmount;
+        orderStatus = 'PENDING_PAYMENT'; // Electronic payments require payment processing
+        paidAmount = 0; // Not paid yet
       } else if (paymentMethod === 'BANK') {
-        orderStatus = 'PAYMENT_PENDING'; // Bank transfer - awaiting verification
+        orderStatus = 'PENDING_PAYMENT'; // Bank transfer - awaiting verification
         paidAmount = 0;
       }
-      
+
       const orderCode = `CC${Date.now()}`;
-      
+
       // Create Firebase order object (removing undefined values)
       const firestoreOrder: any = {
         orderId: orderCode,
@@ -128,7 +128,7 @@ export class OrderService {
       if (instructions) {
         firestoreOrder.instructions = instructions;
       }
-      
+
       // Save to Firebase orders collection
       const docRef = await addDoc(collection(db, 'orders'), firestoreOrder);
       console.log(`✅ Order ${orderCode} saved to Firebase with ID:`, docRef.id);
@@ -139,16 +139,16 @@ export class OrderService {
         // Dynamic restaurant-to-vendor mapping
         // In production, this would come from a database lookup
         // For now, we'll try to find the vendor UID dynamically
-        
+
         console.log(`🔍 Looking up vendor for restaurant ID: ${restaurant}`);
-        
+
         // Method 1: Try to find vendor by querying the eateries collection
         let vendorUID: string | null = null;
-        
+
         try {
           // Query the eateries collection to find which vendor owns this restaurant
           const eateriesSnapshot = await getDocs(collection(db, 'eateries'));
-          
+
           for (const doc of eateriesSnapshot.docs) {
             const eateryData = doc.data();
             // Check if this eatery has this restaurant ID
@@ -168,20 +168,20 @@ export class OrderService {
         } catch (lookupError) {
           console.warn('⚠️ Could not lookup vendor from eateries collection:', lookupError);
         }
-        
+
         // Method 2: If no specific mapping found, save to all active vendors
         // This ensures orders don't get lost while the mapping system is being set up
         const vendorUIDs: string[] = [];
-        
+
         if (vendorUID) {
           vendorUIDs.push(vendorUID);
         } else {
           console.log(`🔄 No specific vendor found for restaurant ${restaurant}, will save to all active vendors`);
-          
+
           // Get all vendor UIDs from eateries collection
           try {
             const allEateriesSnapshot = await getDocs(collection(db, 'eateries'));
-            
+
             if (allEateriesSnapshot.docs.length > 0) {
               const allVendorUIDs = allEateriesSnapshot.docs.map(doc => doc.id);
               vendorUIDs.push(...allVendorUIDs);
@@ -212,9 +212,9 @@ export class OrderService {
               createdAt: serverTimestamp(),
               restaurantIds: [restaurant] // Map this vendor to this restaurant
             }, { merge: true }); // merge: true means only update if document doesn't exist
-            
+
             console.log(`✅ Ensured eatery document exists for vendor: ${currentVendorUID}`);
-            
+
             const vendorOrderData = {
               // Use the exact same structure that MenuVerse expects
               id: docRef.id,
@@ -231,8 +231,8 @@ export class OrderService {
                 price: item.price
               })),
               totalAmount: orderAmount,
-              status: orderStatus === 'PENDING' ? 'Pending' : 
-                     orderStatus === 'CONFIRMED' ? 'Confirmed' : 'Pending',
+              status: orderStatus === 'PENDING' ? 'Pending' :
+                orderStatus === 'CONFIRMED' ? 'Confirmed' : 'Pending',
               createdAt: firestoreOrder.createdAt,
               // Additional ChopChop specific fields
               orderId: orderCode,
@@ -240,14 +240,14 @@ export class OrderService {
               paymentMethod,
               platform: 'ChopChop'
             };
-            
+
             const vendorPath = `eateries/${currentVendorUID}/orders`;
             const vendorDocRef = await addDoc(collection(db, 'eateries', currentVendorUID, 'orders'), vendorOrderData);
-            
+
             console.log(`✅ Order ${orderCode} saved to vendor path: ${vendorPath} with ID: ${vendorDocRef.id}`);
             console.log(`📊 Order data saved:`, vendorOrderData);
             console.log(`🎯 VERIFICATION: Order should be visible at Firebase path: eateries/${currentVendorUID}/orders/${vendorDocRef.id}`);
-            
+
             // 🔄 SYNC TO CUSTOMER ORDERS: Save order to customer-accessible collection
             // Temporarily disabled to fix build issue
             /*
@@ -283,7 +283,7 @@ export class OrderService {
               // Don't fail the main order - this is supplementary
             }
             */
-            
+
           } catch (pathError) {
             console.error(`❌ Failed to save to vendor UID ${currentVendorUID}:`, pathError);
           }
@@ -307,26 +307,26 @@ export class OrderService {
               source: 'ChopChop Debug Save'
             }
           };
-          
+
           await addDoc(collection(db, 'eateries', 'DEBUG_VENDOR', 'orders'), debugOrderData);
           console.log(`🐛 DEBUG: Order saved to eateries/DEBUG_VENDOR/orders for testing`);
-          
+
         } catch (debugError) {
           console.warn('Debug save failed:', debugError);
         }
-        
+
       } catch (vendorError) {
         console.error('⚠️ Failed to save to vendor collections:', vendorError);
         // Don't throw - global order was saved successfully
       }
-      
+
       return {
         orderId: orderCode,
         orderStatus,
         total: orderAmount,
         firebaseId: docRef.id
       };
-      
+
     } catch (error) {
       console.error('❌ Firebase order creation failed:', error);
       throw new Error(`Failed to place order: ${error.message}`);
@@ -337,19 +337,19 @@ export class OrderService {
     try {
       const { updateDoc, doc } = await import('firebase/firestore');
       const orderRef = doc(db, 'orders', firebaseId);
-      
+
       const updateData: any = {
         orderStatus: status,
         updatedAt: serverTimestamp()
       };
-      
+
       if (paidAmount !== undefined) {
         updateData.paidAmount = paidAmount;
       }
-      
+
       await updateDoc(orderRef, updateData);
       console.log(`✅ Order ${firebaseId} status updated to ${status}`);
-      
+
     } catch (error) {
       console.error('❌ Firebase order update failed:', error);
       throw error;

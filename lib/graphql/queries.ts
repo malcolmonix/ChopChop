@@ -279,89 +279,98 @@ export const PLACE_ORDER = gql`
   }
 `;
 
-export const UPDATE_ORDER_STATUS = gql`
   mutation UpdateOrderStatus($id: ID!, $status: OrderStatus!) {
-    updateOrderStatus(id: $id, status: $status) {
-      id
-      status
-    }
+  updateOrderStatus(id: $id, status: $status) {
+    id
+    status
   }
+}
+`;
+
+export const UPDATE_PAYMENT_STATUS = gql`
+  mutation UpdatePaymentStatus($orderId: ID!, $status: String!, $paymentMethod: String!, $transactionId: String) {
+  updatePaymentStatus(orderId: $orderId, status: $status, paymentMethod: $paymentMethod, transactionId: $transactionId) {
+    id
+    status
+    total
+  }
+}
 `;
 
 // Order Tracking Queries
 export const GET_ORDER_TRACKING = gql`
   query GetOrderTracking($orderId: String!) {
-    orderTracking(orderId: $orderId) {
-      id
-      orderId
-      restaurantId
-      restaurantName
-      orderStatus
-      deliveryStatus
-      paymentMethod
-      orderAmount
-      deliveryCharges
-      tipping
-      taxationAmount
-      paidAmount
-      deliveryAddress
-      deliveryLatitude
-      deliveryLongitude
-      instructions
-      orderDate
-      createdAt
-      estimatedDeliveryTime
+  orderTracking(orderId: $orderId) {
+    id
+    orderId
+    restaurantId
+    restaurantName
+    orderStatus
+    deliveryStatus
+    paymentMethod
+    orderAmount
+    deliveryCharges
+    tipping
+    taxationAmount
+    paidAmount
+    deliveryAddress
+    deliveryLatitude
+    deliveryLongitude
+    instructions
+    orderDate
+    createdAt
+    estimatedDeliveryTime
       customer {
-        name
-        email
-        phone
-        address
-      }
+      name
+      email
+      phone
+      address
+    }
       items {
-        id
-        name
-        quantity
-        price
-        variation
-        addons
-      }
+      id
+      name
+      quantity
+      price
+      variation
+      addons
+    }
       rider {
-        name
-        phone
-        vehicleNumber
+      name
+      phone
+      vehicleNumber
         currentLocation {
-          latitude
-          longitude
-        }
+        latitude
+        longitude
       }
+    }
       statusHistory {
-        status
-        timestamp
-        message
+      status
+      timestamp
+      message
         location {
-          latitude
-          longitude
-        }
+        latitude
+        longitude
       }
     }
   }
+}
 `;
 
 export const SUBSCRIBE_ORDER_STATUS = gql`
   subscription OnOrderStatusChanged($orderId: String!) {
-    orderStatusChanged(orderId: $orderId) {
-      orderId
-      orderStatus
-      deliveryStatus
-      estimatedDeliveryTime
+  orderStatusChanged(orderId: $orderId) {
+    orderId
+    orderStatus
+    deliveryStatus
+    estimatedDeliveryTime
       rider {
-        name
-        phone
+      name
+      phone
         currentLocation {
-          latitude
-          longitude
-        }
+        latitude
+        longitude
       }
     }
   }
+}
 `;

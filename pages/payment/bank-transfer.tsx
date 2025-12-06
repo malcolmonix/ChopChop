@@ -14,9 +14,8 @@ interface BankAccount {
 function BankTransferPaymentPage() {
   const router = useRouter();
   const { showToast } = useToast();
-  const { amount, method } = router.query;
+  const { amount, method, orderId } = router.query;
 
-  const [orderData, setOrderData] = useState<any>(null);
   const [isConfirming, setIsConfirming] = useState(false);
   const [transferReference, setTransferReference] = useState('');
   const [step, setStep] = useState<'details' | 'confirmation'>('details');
@@ -32,15 +31,13 @@ function BankTransferPaymentPage() {
   const orderRef = `CC${Date.now()}`;
 
   useEffect(() => {
-    // Retrieve pending order data from session storage
-    const pendingOrderData = sessionStorage.getItem('pendingOrder');
-    if (pendingOrderData) {
-      setOrderData(JSON.parse(pendingOrderData));
-    } else {
-      // Redirect back to checkout if no pending order
-      router.push('/checkout');
+    // Validate we have necessary info
+    if (!router.isReady) return;
+
+    if (!amount || !orderId) {
+      console.warn('Missing amount or orderId');
     }
-  }, [router]);
+  }, [router.isReady, amount, orderId]);
 
   const copyToClipboard = async (text: string, label: string) => {
     try {
@@ -66,26 +63,21 @@ function BankTransferPaymentPage() {
 
       // In a real implementation, you would verify the bank transfer
       // For demo purposes, we'll simulate a pending payment state
-      
-      // Place the order with BANK payment method using Firebase
-      const response = await OrderService.placeOrder({
-        restaurant: Number(orderData.restaurant),
-        orderInput: orderData.orderInput,
-        paymentMethod: 'BANK',
-        address: orderData.address,
-        deliveryCharges: orderData.deliveryCharges,
-        tipping: orderData.tipping,
-        taxationAmount: orderData.taxationAmount,
-        instructions: orderData.instructions
-      });
 
-      // Clear pending order data
-      sessionStorage.removeItem('pendingOrder');
+      if (!orderId) throw new Error('Order ID missing');
 
-      showToast('success', 'Payment confirmation submitted! We will verify your transfer and update your order status.');
-      
+      // For Bank Transfer, we might not auto-confirm. But for "Demo", let's say "Payment Confirm Submitted"
+      // and maybe leave status as PENDING_PAYMENT?
+      // But OrderService.placeOrder logic I updated sets it to PENDING_PAYMENT for BANK.
+      // So it is ALREADY PENDING_PAYMENT.
+      // We just need to maybe add a note?
+      // The previous code placed order here. Now it's already placed.
+      // We can just redirect.
+
+      showToast('success', 'Payment confirmation submitted! We will verify your transfer.');
+
       // Redirect to order confirmation
-      router.push(`/order-confirmation?orderId=${response.orderId}&pending=true`);
+      router.push(`/order-confirmation?orderId=${orderId}&pending=true`);
 
     } catch (error: any) {
       console.error('Payment confirmation error:', error);
@@ -105,7 +97,7 @@ function BankTransferPaymentPage() {
     }
   };
 
-  if (!orderData) {
+  if (!router.isReady || !amount || !orderId) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -141,7 +133,7 @@ function BankTransferPaymentPage() {
           <>
             <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
               <h3 className="text-lg font-medium text-gray-900 mb-4">Transfer to this account</h3>
-              
+
               <div className="space-y-4">
                 <div className="flex items-center justify-between py-3 border-b border-gray-200">
                   <span className="text-gray-600">Bank Name</span>
@@ -155,7 +147,7 @@ function BankTransferPaymentPage() {
                     </button>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center justify-between py-3 border-b border-gray-200">
                   <span className="text-gray-600">Account Number</span>
                   <div className="flex items-center">
@@ -168,7 +160,7 @@ function BankTransferPaymentPage() {
                     </button>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center justify-between py-3 border-b border-gray-200">
                   <span className="text-gray-600">Account Name</span>
                   <div className="flex items-center">
@@ -181,7 +173,7 @@ function BankTransferPaymentPage() {
                     </button>
                   </div>
                 </div>
-                
+
                 {bankAccount.sortCode && (
                   <div className="flex items-center justify-between py-3 border-b border-gray-200">
                     <span className="text-gray-600">Sort Code</span>
@@ -196,7 +188,7 @@ function BankTransferPaymentPage() {
                     </div>
                   </div>
                 )}
-                
+
                 <div className="flex items-center justify-between py-3">
                   <span className="text-gray-600">Amount</span>
                   <div className="flex items-center">
@@ -231,7 +223,7 @@ function BankTransferPaymentPage() {
             {/* Transfer Confirmation Form */}
             <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
               <h3 className="text-lg font-medium text-gray-900 mb-4">After making the transfer</h3>
-              
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -273,7 +265,7 @@ function BankTransferPaymentPage() {
         {step === 'confirmation' && (
           <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Confirm Payment</h3>
-            
+
             <div className="space-y-4">
               <div className="bg-gray-50 rounded-lg p-4">
                 <div className="text-sm text-gray-600 mb-2">Transfer Details</div>

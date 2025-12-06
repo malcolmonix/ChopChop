@@ -14,7 +14,7 @@ interface CardDetails {
 function CardPaymentPage() {
   const router = useRouter();
   const { showToast } = useToast();
-  const { amount, method } = router.query;
+  const { amount, method, orderId } = router.query;
 
   const [cardDetails, setCardDetails] = useState<CardDetails>({
     cardNumber: '',
@@ -23,18 +23,17 @@ function CardPaymentPage() {
     cardholderName: ''
   });
   const [isProcessing, setIsProcessing] = useState(false);
-  const [orderData, setOrderData] = useState<any>(null);
 
   useEffect(() => {
-    // Retrieve pending order data from session storage
-    const pendingOrderData = sessionStorage.getItem('pendingOrder');
-    if (pendingOrderData) {
-      setOrderData(JSON.parse(pendingOrderData));
-    } else {
-      // Redirect back to checkout if no pending order
-      router.push('/checkout');
+    // Validate we have necessary info
+    if (!router.isReady) return;
+
+    if (!amount || !orderId) {
+      console.warn('Missing amount or orderId');
+      // showToast('error', 'Invalid payment session');
+      // router.push('/checkout');
     }
-  }, [router]);
+  }, [router.isReady, amount, orderId]);
 
   const formatCardNumber = (value: string) => {
     // Remove all non-digit characters
@@ -78,7 +77,7 @@ function CardPaymentPage() {
 
   const validateCardDetails = () => {
     const { cardNumber, expiryDate, cvv, cardholderName } = cardDetails;
-    
+
     if (!cardNumber || cardNumber.replace(/\s/g, '').length < 13) {
       throw new Error('Please enter a valid card number');
     }
@@ -110,30 +109,24 @@ function CardPaymentPage() {
 
       // Simulate payment success (90% success rate for demo)
       const paymentSuccess = Math.random() > 0.1;
-      
+
       if (!paymentSuccess) {
         throw new Error('Payment was declined. Please try a different card.');
       }
 
-      // If payment successful, place the order using Firebase
-      const response = await OrderService.placeOrder({
-        restaurant: Number(orderData.restaurant),
-        orderInput: orderData.orderInput,
-        paymentMethod: 'CARD',
-        address: orderData.address,
-        deliveryCharges: orderData.deliveryCharges,
-        tipping: orderData.tipping,
-        taxationAmount: orderData.taxationAmount,
-        instructions: orderData.instructions
-      });
+      if (!orderId) throw new Error('Order ID missing');
 
-      // Clear pending order data
-      sessionStorage.removeItem('pendingOrder');
+      // Update order status to CONFIRMED
+      await OrderService.updateOrderStatus(
+        orderId as string,
+        'CONFIRMED',
+        Number(amount)
+      );
 
-      showToast('success', 'Payment successful! Your order has been placed.');
-      
+      showToast('success', 'Payment successful! Your order has been confirmed.');
+
       // Redirect to order confirmation
-      router.push(`/order-confirmation?orderId=${response.orderId}`);
+      router.push(`/order-confirmation?orderId=${orderId}`);
 
     } catch (error: any) {
       console.error('Payment error:', error);
@@ -147,7 +140,7 @@ function CardPaymentPage() {
     router.push('/checkout');
   };
 
-  if (!orderData) {
+  if (!router.isReady || !amount || !orderId) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -266,7 +259,7 @@ function CardPaymentPage() {
               `Pay ₦${Number(amount).toLocaleString()}`
             )}
           </button>
-          
+
           <button
             onClick={handleCancel}
             disabled={isProcessing}
